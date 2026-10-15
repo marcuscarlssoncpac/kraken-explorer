@@ -353,6 +353,10 @@ void draw_available(App& app, TxGenerator& gen)
 
     // The controls below wrap on narrow windows, so leave room for last frame's height.
     const float footer = gen.avail_footer > 0.0f ? gen.avail_footer : ImGui::GetFrameHeightWithSpacing() * 2.0f;
+    // At least a few list rows even in a short panel: the footer then scrolls into reach
+    // instead of squeezing the table to nothing.
+    const auto body_h = [footer] { return std::max(ImGui::GetFrameHeightWithSpacing() * 4.0f,
+                                                   ImGui::GetContentRegionAvail().y - footer); };
     if (ImGui::BeginTabBar("##avail_tabs"))
     {
         if (ImGui::BeginTabItem("Message List"))
@@ -404,7 +408,7 @@ void draw_available(App& app, TxGenerator& gen)
             }
             constexpr ImGuiTableFlags flags = ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg | ImGuiTableFlags_ScrollY
                                               | ImGuiTableFlags_Resizable;
-            if (ImGui::BeginTable("##avail", 2, flags, ImVec2(0.0f, -footer)))
+            if (ImGui::BeginTable("##avail", 2, flags, ImVec2(0.0f, body_h())))
             {
                 ImGui::TableSetupScrollFreeze(0, 1);
                 ImGui::TableSetupColumn("ID", ImGuiTableColumnFlags_WidthFixed, 90.0f * px);
@@ -466,7 +470,7 @@ void draw_available(App& app, TxGenerator& gen)
             ImGui::SameLine();
             ImGui::SetNextItemWidth(160.0f * px);
             ImGui::SliderInt("##zoom", &gen.zoom, 30, 120);
-            if (ImGui::BeginChild("##layout", ImVec2(0.0f, -footer), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar))
+            if (ImGui::BeginChild("##layout", ImVec2(0.0f, body_h()), ImGuiChildFlags_Borders, ImGuiWindowFlags_HorizontalScrollbar))
             {
                 draw_bit_matrix(gen.layout_msg, static_cast<float>(gen.zoom));
             }
@@ -1025,7 +1029,9 @@ void draw_tx_generator(App& app, const WorkspaceTab& tab, TxGenerator& gen)
         // Separate ids: the resizable side-by-side child keeps its first size per id.
         const ImVec2 avail = ImGui::GetContentRegionAvail();
         const bool stacked = avail.x < 700.0f * px;
-        const float list_h = std::max(avail.y * 0.45f, ImGui::GetFrameHeightWithSpacing() * 8.0f + gen.avail_footer);
+        // Proportional split so the Active box (and its Add'ed rows) never falls below the
+        // fold; the children scroll when a short panel cannot fit their content.
+        const float list_h = avail.y * 0.55f;
         const bool open = stacked ? ImGui::BeginChild("##available_v", ImVec2(0.0f, list_h), ImGuiChildFlags_Borders)
                                   : ImGui::BeginChild("##available", ImVec2(avail.x * 0.4f, 0.0f),
                                                       ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders);

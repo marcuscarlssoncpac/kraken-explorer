@@ -24,9 +24,11 @@ void build_default_layout(WorkspaceTab& tab, ImVec2 size)
     ImGuiID graph = 0;
     const ImGuiID column = ImGui::DockBuilderSplitNode(tab.dockspace, ImGuiDir_Left, 0.40f, nullptr, &graph);
     ImGuiID top = 0;
-    ImGuiID bottom = ImGui::DockBuilderSplitNode(column, ImGuiDir_Down, 0.45f, nullptr, &top);
+    // The tabbed node needs real height: Generator View shows its lists, Message View its
+    // signal table. CAN Status is a short counter table, so it takes the small share.
+    ImGuiID bottom = ImGui::DockBuilderSplitNode(column, ImGuiDir_Down, 0.55f, nullptr, &top);
     ImGuiID mid = 0;
-    const ImGuiID status = ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Down, 0.5f, nullptr, &mid);
+    const ImGuiID status = ImGui::DockBuilderSplitNode(bottom, ImGuiDir_Down, 0.30f, nullptr, &mid);
     ImGui::DockBuilderGetNode(top)->LocalFlags |= ImGuiDockNodeFlags_HiddenTabBar; // the old central widget
 
     const auto dock = [&](const char* title, ImGuiID node)
@@ -53,7 +55,7 @@ WorkspaceTab& workspace_add_tab(WorkspaceTabs& ws, std::string title, unsigned u
     tab.title = std::move(title);
     tab.uid = uid != 0 ? uid : ws.next_uid;
     ws.next_uid = std::max(ws.next_uid, tab.uid + 1);
-    const std::string key = std::format("workspace{}v4", tab.uid); // v4: one tabbed Log/Generator node; bump to re-layout old inis
+    const std::string key = std::format("workspace{}v5", tab.uid); // v5: taller tabbed node; bump to re-layout old inis
     tab.dockspace = ImHashStr(key.c_str());
     ws.current = static_cast<int>(ws.tabs.size()) - 1;
     ws.select_current = true;
