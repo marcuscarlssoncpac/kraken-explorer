@@ -453,6 +453,7 @@ void draw_available(App& app, TxGenerator& gen)
                 if (add != nullptr)
                 {
                     gen.rows.push_back(row_from_db(gen, *add));
+                    gen.current = static_cast<int>(gen.rows.size()) - 1; // Message View shows it at once
                     gen.rx_dirty = true;
                 }
             }
@@ -483,6 +484,7 @@ void draw_available(App& app, TxGenerator& gen)
         {
             gen.rows.push_back(row_from_db(gen, *m));
         }
+        gen.current = static_cast<int>(gen.rows.size()) - 1; // Message View shows the last added
         gen.rx_dirty = true;
     }
     ImGui::EndDisabled();
@@ -513,6 +515,7 @@ void draw_available(App& app, TxGenerator& gen)
         set_length(row.msg, bus_dlc_lengths[bus_length_to_dlc(gen.manual_dlc)]);
         row.msg.iface = gen.iface;
         gen.rows.push_back(row);
+        gen.current = static_cast<int>(gen.rows.size()) - 1;
         gen.rx_dirty = true;
     }
     gen.avail_footer = ImGui::GetCursorPosY() - footer_top;

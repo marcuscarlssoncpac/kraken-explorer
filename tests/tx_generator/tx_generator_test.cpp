@@ -511,6 +511,7 @@ TEST_CASE("vim keys in Available Messages: j selects, Enter adds the DBC message
     REQUIRE(gen.rows.size() == 1);
     CHECK(gen.rows[0].name == first.name);
     CHECK(gen.rows[0].msg.id == (first.raw_id & can_id_mask_extended));
+    CHECK(gen.current == 0); // the new row is current, so Message View shows it at once
 }
 
 // A DBC in a network without interfaces (a log analysed offline): its messages are still listed,
@@ -682,4 +683,55 @@ TEST_CASE("J1939 PDU1: the destination byte is neither learned as SA nor overwri
     BusMessage other{.id = 0x18EB25FE, .flags = bus_flag::extended};
     tx_apply_j1939_sa(gen, other);
     CHECK(other.id == 0x18EB25FE);
+}
+
+TEST_CASE("mouse click on an active row selects it and sets the Message View row")
+{
+    const UiTest ui({1600, 900});
+    App app;
+    const WorkspaceTab tab{.uid = 5};
+    TxGenerator gen;
+    gen.rows.push_back({.msg = BusMessage{.id = 0x100}, .name = "KrakenStatus"});
+    gen.rows.push_back({.msg = BusMessage{.id = 0x111}, .name = "Tentacle1"});
+    ui_frame(app, tab, gen);
+    // The floating Message View defaults on top of the Generator View: park it aside, as
+    // in the app where it is docked elsewhere.
+    ImGuiWindow* mv = ImGui::FindWindowByName(workspace_window_name(tab, "Message View").c_str());
+    REQUIRE(mv != nullptr);
+    ImGui::SetWindowPos(mv, ImVec2(1400.0f, 820.0f), ImGuiCond_Always);
+    ui_frame(app, tab, gen);
+    ui_frame(app, tab, gen);
+
+    // The Active table: 7 columns inside the Generator View window.
+    ImGuiContext& g = *ImGui::GetCurrentContext();
+    const ImGuiTable* active = nullptr;
+    for (int i = 0; i < g.Tables.GetMapSize(); ++i)
+    {
+        if (const ImGuiTable* t = g.Tables.TryGetMapData(i))
+        {
+            if (t->ColumnsCount == 7 && t->OuterWindow != nullptr
+                && std::string_view(t->OuterWindow->Name).find("Generator View") != std::string_view::npos)
+            {
+                active = t;
+            }
+        }
+    }
+    REQUIRE(active != nullptr);
+    // RowPosY1/Y2 are the last submitted row: row 1 (Tentacle1), a safe target.
+    const ImVec2 cell(active->Columns[1].MinX + 5.0f, (active->RowPosY1 + active->RowPosY2) * 0.5f);
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.AddMousePosEvent(cell.x, cell.y);
+    ui_frame(app, tab, gen);
+    ui_frame(app, tab, gen);
+    INFO("hovered window: ", std::string(g.HoveredWindow != nullptr ? g.HoveredWindow->Name : "none"),
+         " hovered id: ", g.HoveredId, " pos ", cell.x, ",", cell.y);
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    ui_frame(app, tab, gen);
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    ui_frame(app, tab, gen);
+    ui_frame(app, tab, gen);
+
+    CHECK(gen.current == 1);
+    CHECK(gen.rows[1].selected);
 }
