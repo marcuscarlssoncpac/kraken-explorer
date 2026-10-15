@@ -54,33 +54,8 @@ refreshes the packages and leaves a draft release unpublished.
 
 ## Code signing
 
-**Status (Oct 2026): releases ship unsigned.** The SignPath Foundation application was declined
-for now (the program wants more public visibility — stars, forks, external references; reapply
-when the project has grown). Without the `SIGNPATH_API_TOKEN` secret the CI builds unsigned
-packages, so everything below is dormant until a certificate exists. Alternatives if signing is
-wanted sooner: Azure Trusted Signing (~$10/month, individuals US/Canada only) or a Certum
-Open Source code signing certificate (from ~€49/year).
-
-The flow, once a certificate exists: packages are signed through
-[SignPath Foundation](https://signpath.org/foundation), which
-provides free code signing certificates to open source projects. In the Windows CI job
-`scripts\build_win_zip.ps1 -StageOnly` builds and stages, the SignPath action signs
-`kraken-explorer.exe` in the cloud and writes it back into the staged folder, `-PackageOnly` zips
-and builds the installer, and a second pass signs the setup.exe. The python3xx.dll ships with the
-Python Software Foundation's own signature. Pull requests and forks have no token and build
-unsigned packages.
-
-One-time setup, after the Foundation application is approved:
-
-1. In SignPath: project `kraken-explorer` connected to this GitHub repository, with the signing
-   policies `release-signing` (Foundation certificate) and `test-signing` (self-signed test
-   certificate, used by main-branch builds), the default artifact configuration (a single PE file).
-2. In the GitHub repository settings: secret `SIGNPATH_API_TOKEN` (a CI user's API token from
-   SignPath) and variable `SIGNPATH_ORGANIZATION_ID`.
-
-SmartScreen reputation is tied to the certificate and builds up with downloads over the first
-releases; a signed file can still warn until then. The uninstaller that Inno Setup generates is
-not signed (Inno's `SignTool` directive needs a local signing tool, which the cloud flow has not).
+Releases ship unsigned; SmartScreen warns on first run (More info → Run anyway). The
+python3xx.dll ships with the Python Software Foundation's own signature.
 
 ## To do
 

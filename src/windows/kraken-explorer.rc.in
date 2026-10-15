@@ -7,7 +7,7 @@ LANGUAGE 0, 0
 // packaging/kraken-explorer.png in an .ico container.
 1 ICON "@CMAKE_CURRENT_SOURCE_DIR@/windows/kraken-explorer.ico"
 
-// Properties > Details of the exe. Code signing (SignPath) requires ProductName and ProductVersion.
+// Properties > Details of the exe. Code signing requires ProductName and ProductVersion.
 1 VERSIONINFO
 FILEVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
 PRODUCTVERSION @PROJECT_VERSION_MAJOR@,@PROJECT_VERSION_MINOR@,@PROJECT_VERSION_PATCH@,0
