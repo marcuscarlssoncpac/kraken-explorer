@@ -1523,7 +1523,8 @@ void draw_graph(App& app, const WorkspaceTab& tab, GraphState& g)
         if (ImGui::BeginChild("##side", ImVec2(280.0f * px, 0.0f), ImGuiChildFlags_ResizeX | ImGuiChildFlags_Borders))
         {
             ImGui::SetNextItemWidth(-FLT_MIN);
-            const SignalEntry* hit = signal_search_input(g.finder, app.setup, "Search signals...", g.search);
+            // Only signals actually seen on the bus / in the loaded log are offered.
+            const SignalEntry* hit = signal_search_input(g.finder, app.setup, "Search signals...", g.search, false, &app.signal_seen);
             if (ImGui::BeginChild("##tree", ImVec2(0.0f, ImGui::GetContentRegionAvail().y * 0.45f),
                                   ImGuiChildFlags_ResizeY | ImGuiChildFlags_Borders))
             {
@@ -1652,7 +1653,8 @@ void draw_find_signal(App& app, const WorkspaceTab& tab, GraphState& g)
     }
     ImGui::TextUnformatted("Find signal");
     ImGui::SetNextItemWidth(-FLT_MIN);
-    const SignalEntry* hit = signal_search_input(g.palette, app.setup, "Message.Signal...", g.palette_query, ImGui::IsWindowAppearing());
+    const SignalEntry* hit = signal_search_input(g.palette, app.setup, "Message.Signal...", g.palette_query,
+                                                 ImGui::IsWindowAppearing(), &app.signal_seen);
     if (ImGui::BeginChild("##hits", ImVec2(0.0f, 0.0f), ImGuiChildFlags_Borders))
     {
         if (const SignalEntry* e = signal_search_list(g.palette))

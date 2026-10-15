@@ -48,6 +48,9 @@ struct App
 {
     bool quit = false;
     bool measuring = false; // measurement running; set by measurement start/stop (T16)
+    // Why measurement start refused to start, with what to do about it; shown as a modal
+    // ("Cannot start measurement") by app_frame until the user closes it.
+    std::string measurement_error;
     MainMenu menu;          // menu/control-bar commands, recent files, record toggle
     InkState ink;           // the "ink" easter egg (ui/ink.h)
     Settings settings;      // ini-backed settings + current workspace file
@@ -55,6 +58,7 @@ struct App
     ThemeFonts fonts; // fonts.mono for hex/data columns
     Tasks tasks;      // work posted from other threads; tasks.wake doubles as the RX wake-up
     Trace trace;
+    SignalSeen signal_seen; // ids seen in the trace, kept current by app_frame; filters the Graph's signal search
     std::shared_ptr<const FrameCache> trace_file; // keeps the mapping of trace.file (a loaded file) alive
     bool replay_was_running = false;  // last frame: the file view is restored when a replay ends
     std::unordered_map<unsigned, TraceWindowState> trace_windows; // per workspace tab uid
@@ -101,8 +105,12 @@ struct App
 
 // Enumerates the drivers and, if the setup is empty, fills it with one network per interface.
 void app_init_interfaces(App& app);
-// Opens every enabled setup interface and starts its listener thread.
+// Opens every enabled setup interface and starts its listener thread. With no interface
+// enabled, or none of the enabled ones opening, the measurement is refused and
+// App::measurement_error says why and what to do.
 void app_measurement_start(App& app);
+// The "Cannot start measurement" modal while measurement_error is set; part of app_frame.
+void draw_measurement_error(App& app);
 // Joins the listener threads and closes the interfaces. Call before glfwTerminate.
 void app_measurement_stop(App& app);
 

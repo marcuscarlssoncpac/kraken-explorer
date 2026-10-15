@@ -9,13 +9,14 @@
 
 #include "core/fuzzy.h"
 #include "core/setup.h"
+#include "core/trace.h"
 #include "db/model/can_db.h"
 #include "db/model/lin_db.h"
 
 namespace
 {
 
-void rebuild_entries(SignalSearch& s, const Setup& setup)
+void rebuild_entries(SignalSearch& s, const Setup& setup, const SignalSeen* seen)
 {
     s.entries.clear();
     for (std::size_t ni = 0; ni < setup.networks.size(); ++ni)
@@ -25,6 +26,10 @@ void rebuild_entries(SignalSearch& s, const Setup& setup)
         {
             for (const auto& [raw_id, msg] : db->messages)
             {
+                if (seen != nullptr && !seen->can.contains(raw_id))
+                {
+                    continue; // never on the bus / in the log
+                }
                 for (const CanDbSignal& sig : msg.signals)
                 {
                     s.entries.push_back({.label = msg.name + '.' + sig.name, .network = ni, .raw_id = raw_id,
@@ -40,6 +45,10 @@ void rebuild_entries(SignalSearch& s, const Setup& setup)
         {
             for (const auto& [id, frame] : db->frames)
             {
+                if (seen != nullptr && !seen->lin.contains(id))
+                {
+                    continue;
+                }
                 for (const LinSignal& sig : frame.signals)
                 {
                     s.entries.push_back({.label = frame.name + '.' + sig.name, .network = ni, .raw_id = id,
@@ -86,13 +95,76 @@ const SignalEntry* picked(const SignalEntry* e)
 
 } // namespace
 
-void signal_search_update(SignalSearch& s, const Setup& setup, const std::string& query)
+void signal_seen_update(SignalSeen& seen, const Trace& trace)
 {
-    const bool rebuilt = s.generation != setup.generation;
+    const void* file = trace.file.empty() ? nullptr : trace.file.data();
+    if (trace.clears != seen.clears || file != seen.file || trace.end < seen.scanned)
+    {
+        seen.can.clear();
+        seen.lin.clear();
+        seen.scanned = trace.begin;
+        seen.clears = trace.clears;
+        seen.file = file;
+        ++seen.generation;
+    }
+    // Pruned frames stay counted: "seen" means it occurred, not that it is still retained.
+    seen.scanned = std::max(seen.scanned, trace.begin);
+    if (seen.scanned >= trace.end)
+    {
+        return;
+    }
+    bool changed = false;
+    const auto note = [&](BusType type, uint32_t id, uint16_t flags, uint16_t errors)
+    {
+        if (errors != 0)
+        {
+            return; // error frames carry no usable id
+        }
+        if (type == BusType::CAN)
+        {
+            const bool ext = (flags & bus_flag::extended) != 0;
+            const uint32_t key = (id & (ext ? can_id_mask_extended : can_id_mask_standard))
+                                 | (ext ? 0x80000000u : 0u); // the DBC raw-id key (setup_find_can_message)
+            changed |= seen.can.insert(key).second;
+        }
+        else
+        {
+            changed |= seen.lin.insert(static_cast<uint8_t>(id & 0x3F)).second;
+        }
+    };
+    if (!trace.file.empty())
+    {
+        // File view: the 32-byte records in place, no payload decode.
+        for (uint64_t i = seen.scanned; i < trace.end; ++i)
+        {
+            const FrameCacheRec& r = trace.file[i - trace.begin];
+            note(r.type, r.id, r.flags, r.errors);
+        }
+    }
+    else
+    {
+        for (uint64_t i = seen.scanned; i < trace.end; ++i)
+        {
+            const BusMessage m = trace_at(trace, i);
+            note(m.type, m.id, m.flags, m.errors);
+        }
+    }
+    seen.scanned = trace.end;
+    if (changed)
+    {
+        ++seen.generation;
+    }
+}
+
+void signal_search_update(SignalSearch& s, const Setup& setup, const std::string& query, const SignalSeen* seen)
+{
+    const uint64_t seen_gen = seen != nullptr ? seen->generation : UINT64_MAX;
+    const bool rebuilt = s.generation != setup.generation || s.seen_generation != seen_gen;
     if (rebuilt)
     {
-        rebuild_entries(s, setup);
+        rebuild_entries(s, setup, seen);
         s.generation = setup.generation;
+        s.seen_generation = seen_gen;
     }
     if (!rebuilt && query == s.query)
     {
@@ -121,7 +193,8 @@ void signal_search_update(SignalSearch& s, const Setup& setup, const std::string
     s.scroll_to_selected = true;
 }
 
-const SignalEntry* signal_search_input(SignalSearch& s, const Setup& setup, const char* hint, std::string& query, bool focus)
+const SignalEntry* signal_search_input(SignalSearch& s, const Setup& setup, const char* hint, std::string& query, bool focus,
+                                       const SignalSeen* seen)
 {
     if (focus || s.focus_input)
     {
@@ -137,7 +210,7 @@ const SignalEntry* signal_search_input(SignalSearch& s, const Setup& setup, cons
     };
     const bool enter = ImGui::InputTextWithHint("##signal_search", hint, &query,
                                                 ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory, history, &step);
-    signal_search_update(s, setup, query);
+    signal_search_update(s, setup, query, seen);
     const int n = static_cast<int>(s.hits.size());
     if (step != 0 && n > 0)
     {

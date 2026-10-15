@@ -964,3 +964,104 @@ TEST_CASE("file view: the graph centres on the Log's selected row (Value Search 
     ImPlot::DestroyContext();
     ImGui::DestroyContext();
 }
+
+// --- Graph search filtered by what the bus / log actually carried ------------------------------
+
+#include "core/frame_cache_rec.h"
+#include "core/trace.h"
+
+namespace
+{
+
+// Net with Engine (0x123), Brake (0x200) and the extended Ext29 (0x18FF0001).
+Setup seen_setup()
+{
+    auto db = std::make_shared<CanDb>();
+    CanDbMessage& engine = db->messages[0x123];
+    engine.name = "Engine";
+    engine.raw_id = 0x123;
+    engine.signals.push_back({.name = "Rpm", .length = 16, .unit = "rpm"});
+    CanDbMessage& brake = db->messages[0x200];
+    brake.name = "Brake";
+    brake.raw_id = 0x200;
+    brake.signals.push_back({.name = "Pressure", .length = 8, .unit = "bar"});
+    CanDbMessage& ext = db->messages[0x18FF0001 | 0x80000000u];
+    ext.name = "Ext29";
+    ext.raw_id = 0x18FF0001 | 0x80000000u;
+    ext.signals.push_back({.name = "Value", .length = 8});
+    Setup setup;
+    setup.networks.push_back({.name = "Net", .can_dbs = {db}});
+    return setup;
+}
+
+std::vector<std::string> labels(const SignalSearch& s)
+{
+    std::vector<std::string> out;
+    for (const SignalEntry& e : s.entries)
+    {
+        out.push_back(e.label);
+    }
+    std::ranges::sort(out);
+    return out;
+}
+
+} // namespace
+
+TEST_CASE("graph search lists only signals seen in the trace, not the whole DBC")
+{
+    const Setup setup = seen_setup();
+    Trace trace;
+    BusMessage m{.id = 0x123};
+    set_length(m, 8);
+    trace_append(trace, std::array{m});
+
+    SignalSeen seen;
+    signal_seen_update(seen, trace);
+    SignalSearch s;
+    signal_search_update(s, setup, "", &seen);
+    CHECK(labels(s) == std::vector<std::string>{"Engine.Rpm"}); // Brake / Ext29 never on the bus
+
+    // The extended frame arrives (29-bit id, maps to the DBC's bit-31 key) -> it appears.
+    BusMessage e{.id = 0x18FF0001, .flags = bus_flag::extended};
+    set_length(e, 8);
+    trace_append(trace, std::array{e});
+    signal_seen_update(seen, trace);
+    signal_search_update(s, setup, "", &seen);
+    CHECK(labels(s) == std::vector<std::string>{"Engine.Rpm", "Ext29.Value"});
+
+    // A standard frame with the same low bits as Ext29 must not match the extended entry.
+    CHECK(seen.can.contains(0x80000000u | 0x18FF0001));
+    CHECK_FALSE(seen.can.contains(0x200));
+
+    // Trace cleared -> nothing is on the bus -> nothing is offered.
+    trace_clear(trace);
+    signal_seen_update(seen, trace);
+    signal_search_update(s, setup, "", &seen);
+    CHECK(s.entries.empty());
+
+    // Without a seen filter (Instrument Panel, Watch, Ctrl+P) everything stays listed.
+    SignalSearch all;
+    signal_search_update(all, setup, "");
+    CHECK(all.entries.size() == 3);
+}
+
+TEST_CASE("signal_seen_update scans a file view (loaded log) and re-ranks the query")
+{
+    const Setup setup = seen_setup();
+    std::vector<FrameCacheRec> recs;
+    BusMessage m{.id = 0x200};
+    set_length(m, 8);
+    recs.push_back(frame_cache_encode(m, 0));
+    Trace trace;
+    trace.file = recs;
+    trace.begin = 0;
+    trace.end = recs.size();
+
+    SignalSeen seen;
+    signal_seen_update(seen, trace);
+    SignalSearch s;
+    signal_search_update(s, setup, "press", &seen);
+    REQUIRE(labels(s) == std::vector<std::string>{"Brake.Pressure"});
+    REQUIRE(s.hits.size() == 1); // the query matched against the filtered entries
+    CHECK(s.entries[static_cast<std::size_t>(s.hits[0].entry)].label == "Brake.Pressure");
+}

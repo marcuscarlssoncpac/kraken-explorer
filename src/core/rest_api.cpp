@@ -24,6 +24,7 @@
 #include <chrono>
 #include <cstring>
 #include <format>
+#include <utility>
 #include <future>
 
 #include "app.h"
@@ -229,6 +230,12 @@ std::string rest_api_handle(App& app, std::string_view method, std::string_view 
     if (post && path == "/measurement/start")
     {
         app_measurement_start(app);
+        if (!app.measuring && !app.measurement_error.empty())
+        {
+            // Refused (no interface / all down): the API caller gets the reason, not the GUI modal.
+            status = 409;
+            return std::format("{{\"error\":{}}}", json_string(std::exchange(app.measurement_error, {})));
+        }
         return status_json(app);
     }
     if (post && path == "/measurement/stop")

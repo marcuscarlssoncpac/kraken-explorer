@@ -2,12 +2,47 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_MAIN
 #include <doctest/doctest.h>
 
+#include <algorithm>
+#include <chrono>
 #include <string>
 #include <thread>
 
 #include "app.h"
 #include "core/net.h"
 #include "core/rest_api.h"
+#include "drivers/driver.h"
+
+namespace
+{
+
+const DriverOps fake_driver = {
+    .name = "Fake",
+    .enumerate = nullptr,
+    .open = [](Iface&, const IfaceConfig&) { return true; },
+    .close = [](Iface&) {},
+    .send = [](Iface&, const BusMessage&) { return true; },
+    .read = [](Iface&, BusMessage*, int, int timeout_ms)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeout_ms, 5)));
+        return 0;
+    },
+    .stats = nullptr,
+    .lin_sleep_wakeup = nullptr,
+    .lin_set_schedule = nullptr,
+    .lin_diag_request = nullptr,
+};
+
+// A measurement start needs an openable interface since the refused-start change.
+void add_fake(App& app)
+{
+    Iface& i = app.ifaces.emplace_back();
+    i.ops = &fake_driver;
+    i.info.name = "fake0";
+    app.setup.networks.push_back({.name = "Net"});
+    app.setup.networks[0].interfaces.push_back({.driver = "Fake", .name = "fake0", .enabled = true});
+}
+
+} // namespace
 
 TEST_CASE("json_get: strings with escapes, numbers, booleans, missing keys")
 {
@@ -28,6 +63,14 @@ TEST_CASE("routes: status, measurement start/stop, trace clear, record, errors")
     CHECK(body.find("\"measuring\":false") != std::string::npos);
     CHECK(body.find("\"trace_frames\":0") != std::string::npos);
 
+    // No interface: the start is refused with the reason, and no GUI modal is left pending.
+    body = rest_api_handle(app, "POST", "/measurement/start", "", status);
+    CHECK(status == 409);
+    CHECK_FALSE(app.measuring);
+    CHECK(body.find("Setup Interface") != std::string::npos);
+    CHECK(app.measurement_error.empty());
+
+    add_fake(app);
     body = rest_api_handle(app, "POST", "/measurement/start", "", status);
     CHECK(status == 200);
     CHECK(app.measuring);
@@ -59,6 +102,7 @@ TEST_CASE("routes: status, measurement start/stop, trace clear, record, errors")
 TEST_CASE("HTTP round trip on 127.0.0.1: the request runs on the main thread")
 {
     App app;
+    add_fake(app);
     RestApi api;
     REQUIRE(rest_api_start(api, app, 0));
     REQUIRE(api.port != 0);

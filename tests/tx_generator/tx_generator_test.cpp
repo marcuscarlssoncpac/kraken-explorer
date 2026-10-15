@@ -623,3 +623,44 @@ TEST_CASE("expanded row details span the table width, not the Name column")
     REQUIRE(table > 0.0f);
     CHECK(details >= table * 0.9f);
 }
+
+TEST_CASE("J1939: a row's source address comes from the traffic seen on the bus")
+{
+    TxGenerator gen;
+    // EEC1 (PGN 0xF004) broadcast by the real ECU at SA 0x29.
+    BusMessage rx{.id = 0x18F00429, .flags = bus_flag::extended};
+    set_length(rx, 8);
+    tx_generator_on_rx(gen, std::array{rx});
+
+    // The DBC carries the placeholder SA 0xFE: sending must use the learned 0x29.
+    BusMessage msg{.id = 0x18F004FE, .flags = bus_flag::extended};
+    tx_apply_j1939_sa(gen, msg);
+    CHECK(msg.id == 0x18F00429);
+
+    // A standard-id frame is not J1939: untouched.
+    BusMessage std_msg{.id = 0x123};
+    tx_apply_j1939_sa(gen, std_msg);
+    CHECK(std_msg.id == 0x123);
+
+    // A PGN never seen on the bus keeps the DBC's address.
+    BusMessage other{.id = 0x18FEF1FE, .flags = bus_flag::extended};
+    tx_apply_j1939_sa(gen, other);
+    CHECK(other.id == 0x18FEF1FE);
+
+    // Our own TX echoes and error frames teach nothing.
+    BusMessage echo{.id = 0x18FEF133, .flags = bus_flag::extended | bus_flag::tx};
+    BusMessage err{.id = 0x18FEF144, .flags = bus_flag::extended, .errors = bus_error::generic};
+    set_length(echo, 8);
+    set_length(err, 8);
+    tx_generator_on_rx(gen, std::array{echo, err});
+    tx_apply_j1939_sa(gen, other);
+    CHECK(other.id == 0x18FEF1FE);
+
+    // A newer sender of the same PGN wins (last seen on the bus).
+    BusMessage rx2{.id = 0x18F00431, .flags = bus_flag::extended};
+    set_length(rx2, 8);
+    tx_generator_on_rx(gen, std::array{rx2});
+    BusMessage msg2{.id = 0x18F004FE, .flags = bus_flag::extended};
+    tx_apply_j1939_sa(gen, msg2);
+    CHECK(msg2.id == 0x18F00431);
+}

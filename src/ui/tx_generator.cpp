@@ -21,6 +21,7 @@
 #include "core/platform.h"
 #include "core/text.h"
 #include "db/model/can_db.h"
+#include "decoders/decoders.h" // j1939_pgn
 #include "ui/bit_matrix.h"
 #include "ui/icons.h"
 #include "ui/raw_tx.h"
@@ -299,7 +300,7 @@ void draw_row_details(App& app, TxGenerator& gen, TxCyclic& row)
     }
 }
 
-TxCyclic row_from_db(const CanDbMessage& db, uint16_t iface)
+TxCyclic row_from_db(const TxGenerator& gen, const CanDbMessage& db)
 {
     TxCyclic row{.name = db.name, .db = &db};
     row.msg.id = db.raw_id & can_id_mask_extended;
@@ -309,7 +310,8 @@ TxCyclic row_from_db(const CanDbMessage& db, uint16_t iface)
     {
         row.msg.flags |= bus_flag::fd;
     }
-    row.msg.iface = iface;
+    row.msg.iface = gen.iface;
+    tx_apply_j1939_sa(gen, row.msg); // J1939: the SA seen on the bus, not the DBC placeholder
     return row;
 }
 
@@ -450,7 +452,7 @@ void draw_available(App& app, TxGenerator& gen)
                 ImGui::EndTable();
                 if (add != nullptr)
                 {
-                    gen.rows.push_back(row_from_db(*add, gen.iface));
+                    gen.rows.push_back(row_from_db(gen, *add));
                     gen.rx_dirty = true;
                 }
             }
@@ -479,7 +481,7 @@ void draw_available(App& app, TxGenerator& gen)
     {
         for (const CanDbMessage* m : gen.avail_selected)
         {
-            gen.rows.push_back(row_from_db(*m, gen.iface));
+            gen.rows.push_back(row_from_db(gen, *m));
         }
         gen.rx_dirty = true;
     }
@@ -811,11 +813,36 @@ void tx_signal_set(const CanDbSignal& sig, BusMessage& msg, double physical) noe
     can_signal_inject_physical(sig, msg, physical);
 }
 
+void tx_apply_j1939_sa(const TxGenerator& gen, BusMessage& msg) noexcept
+{
+    if (msg.type != BusType::CAN || !has_flag(msg, bus_flag::extended))
+    {
+        return; // J1939 is 29-bit CAN only
+    }
+    const auto it = gen.j1939_sa.find(j1939_pgn(can_id(msg)));
+    if (it != gen.j1939_sa.end())
+    {
+        msg.id = (can_id(msg) & ~0xFFu) | it->second;
+    }
+}
+
 void tx_generator_on_rx(TxGenerator& gen, std::span<const BusMessage> msgs, TxClock::time_point now, int64_t wall_now_ns)
 {
     if (msgs.empty())
     {
         return;
+    }
+    for (const BusMessage& m : msgs)
+    {
+        // J1939: remember who really sends each PGN, so new rows take that source address
+        // instead of the DBC's placeholder. Own TX echoes teach nothing.
+        // ponytail: last sender wins and every 29-bit frame counts; per-SA choice if mixed
+        // 29-bit non-J1939 traffic ever misleads it.
+        if (m.type == BusType::CAN && has_flag(m, bus_flag::extended)
+            && !has_flag(m, bus_flag::tx) && !is_error_frame(m))
+        {
+            gen.j1939_sa[j1939_pgn(can_id(m))] = static_cast<uint8_t>(m.id & 0xFF);
+        }
     }
     std::scoped_lock lock(gen.mutex);
     if (gen.rx_dirty)

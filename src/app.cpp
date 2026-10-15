@@ -168,6 +168,7 @@ void app_frame(App& app)
         tx_generator_on_rx(gen, app.rx_scratch); // Generator rows triggered "On receive"
     }
     trace_append_sorted(app.trace, app.rx_scratch);
+    signal_seen_update(app.signal_seen, app.trace); // incremental: only the new frames
     for (auto& [uid, panel] : app.instrument_panels)
     {
         instrument_panel_ingest(panel, app.setup, app.trace); // only the frames appended since last time
@@ -210,6 +211,7 @@ void app_frame(App& app)
         setup_dialog_open(app, app.setup_dialog);
     }
     draw_status_bar(app, app.status_bar);
+    draw_measurement_error(app);
     if (WorkspaceTab* tab = draw_workspace(app))
     {
         vim_window_nav(app.vim_windows, tab->uid); // Ctrl+w h/j/k/l/w, before the windows take the keys
@@ -338,35 +340,81 @@ void app_init_interfaces(App& app)
     }
 }
 
+void draw_measurement_error(App& app)
+{
+    constexpr const char* title = "Cannot start measurement";
+    if (!app.measurement_error.empty() && !ImGui::IsPopupOpen(title))
+    {
+        ImGui::OpenPopup(title);
+    }
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Appearing, ImVec2(0.5f, 0.5f));
+    if (!ImGui::BeginPopupModal(title, nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+    {
+        return;
+    }
+    ImGui::TextUnformatted(app.measurement_error.c_str());
+    ImGui::Separator();
+    if (ImGui::Button("Setup Interface..."))
+    {
+        app.measurement_error.clear();
+        ImGui::CloseCurrentPopup();
+        setup_dialog_open(app, app.setup_dialog);
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Close") || ImGui::IsKeyPressed(ImGuiKey_Escape))
+    {
+        app.measurement_error.clear();
+        ImGui::CloseCurrentPopup();
+    }
+    ImGui::EndPopup();
+}
+
 void app_measurement_start(App& app)
 {
     if (app.measuring)
     {
         return;
     }
-    log_info("Starting measurement");
-    recorder_measurement_starting(app.recorder); // before the RX threads, so no first frame is missed
-    ifaces_start(app.ifaces, app.setup, app.rx_consumers, app.tasks.wake);
-    std::string down;
     int enabled = 0;
     for (const auto& net : app.setup.networks)
     {
         for (const auto& si : net.interfaces)
         {
             enabled += si.enabled;
+        }
+    }
+    if (enabled == 0)
+    {
+        app.measurement_error = "No interface is selected.\n"
+                                "Open Setup Interface... and enable the bus to listen on.";
+        log_warning("Measurement not started: no interface selected");
+        return;
+    }
+    log_info("Starting measurement");
+    recorder_measurement_starting(app.recorder); // before the RX threads, so no first frame is missed
+    const int opened = ifaces_start(app.ifaces, app.setup, app.rx_consumers, app.tasks.wake);
+    std::string down;
+    for (const auto& net : app.setup.networks)
+    {
+        for (const auto& si : net.interfaces)
+        {
             if (si.enabled && (si.iface < 0 || !app.ifaces[static_cast<size_t>(si.iface)].open))
             {
                 down += std::format("{}{}/{}", down.empty() ? "" : ", ", si.driver, si.name);
             }
         }
     }
-    if (enabled == 0)
+    if (opened == 0)
     {
-        down = "No interface selected: Setup Interfaces... to add one";
-        status_bar_notice(app.status_bar, down);
-        log_warning(down);
+        recorder_measurement_stopped(app.recorder); // nothing started: unwind the arming
+        app.measurement_error = std::format("Could not open: {}.\n"
+                                            "The interface is down or missing. Bring the link up "
+                                            "(e.g. sudo ip link set can0 up),\n"
+                                            "or pick another one in Setup Interface...", down);
+        log_warning(std::format("Measurement not started, could not open: {}", down));
+        return;
     }
-    else if (!down.empty())
+    if (!down.empty())
     {
         down = std::format("Measurement started without: {}", down);
         status_bar_notice(app.status_bar, down);

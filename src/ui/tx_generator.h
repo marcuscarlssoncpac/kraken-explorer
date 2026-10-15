@@ -67,6 +67,10 @@ struct TxGenerator
 
     // UI (main thread only)
     uint16_t iface = UINT16_MAX; // interface for new rows and the DBC list
+    // J1939: source address last seen on the bus per PGN, learned from RX frames in
+    // tx_generator_on_rx. New rows from a J1939 DBC take the real node's SA instead of
+    // the DBC's placeholder (tx_apply_j1939_sa).
+    std::unordered_map<uint32_t, uint8_t> j1939_sa;
     char search[64] = {};
     std::vector<const CanDbMessage*> avail_selected;
     const CanDbMessage* layout_msg = nullptr; // shown in Layout View
@@ -98,6 +102,10 @@ void tx_generator_stop_all(TxGenerator& gen);
 
 // Physical value -> frame bytes: clamped to [min, max] when the DBC gives a range.
 void tx_signal_set(const CanDbSignal& sig, BusMessage& msg, double physical) noexcept;
+
+// 29-bit CAN id whose PGN was seen on the bus: replaces its source address (low byte)
+// with the last one observed for that PGN (TxGenerator::j1939_sa). No-op otherwise.
+void tx_apply_j1939_sa(const TxGenerator& gen, BusMessage& msg) noexcept;
 
 // Lookup key of an OnReceive trigger / received frame: interface, extended flag, id.
 [[nodiscard]] constexpr uint64_t tx_rx_key(uint16_t iface, uint32_t id, bool extended) noexcept
