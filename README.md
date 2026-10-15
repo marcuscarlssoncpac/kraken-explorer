@@ -11,71 +11,33 @@ deep-sea dark theme, GPL-2.0, fork of [CANgaroo](https://github.com/Schildkroet/
 in the trace, the Ctrl+P signal finder, Value Search, replay with breakpoints and Step, and live
 DBC-decoded traffic on `vcan0`.
 
-## Download
+## Install
 
-Get the packages from the [latest release](https://github.com/stoffej/kraken-explorer/releases/latest)
-([all releases](https://github.com/stoffej/kraken-explorer/releases)):
+Packages are on the [latest release](https://github.com/stoffej/kraken-explorer/releases/latest) page.
 
-| Platform | Package |
-|---|---|
-| Ubuntu / Debian | `kraken-explorer_<version>_amd64.deb` |
-| Linux, no install | `Kraken_Explorer-<version>-x86_64.AppImage` |
-| Windows installer | `kraken-explorer-<version>-win64-setup.exe` |
-| Windows portable | `kraken-explorer-<version>-win64.zip` |
-
-### Linux installation
-
-Choose **one** of these alternatives:
-
-**Method A — Ubuntu / Debian installer**
-
-Downloads and installs the latest `.deb`, including the icon, menu entry and SocketCAN polkit
-rule, and adds you to `netdev`. Log out and back in if prompted.
+**Ubuntu / Debian** — installs the latest `.deb` with icon, menu entry and SocketCAN polkit rule,
+and adds you to `netdev` (log out and back in if prompted):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/stoffej/kraken-explorer/main/scripts/get.sh | sh
 ```
 
-**Method B — Manual `.deb` installation (Ubuntu / Debian)**
+Or download the `.deb` yourself and run `sudo apt install ./kraken-explorer_*_amd64.deb`.
 
-Download the `kraken-explorer_*_amd64.deb` asset from the
-[latest release](https://github.com/stoffej/kraken-explorer/releases/latest).
-In the folder containing the download, with only one matching `.deb`, run:
-
-```bash
-sudo apt install ./kraken-explorer_*_amd64.deb
-```
-
-Both `.deb` methods install `kraken-explorer`, which you can launch from the application menu
-or your terminal.
-
-**Method C — AppImage (Linux, no installation)**
-
-Download the `Kraken_Explorer-*-x86_64.AppImage` asset from the
-[latest release](https://github.com/stoffej/kraken-explorer/releases/latest).
-In the folder containing the download, with only one matching AppImage, run:
+**Any Linux, no install** — download the AppImage, then:
 
 ```bash
 chmod +x ./Kraken_Explorer-*-x86_64.AppImage
 ./Kraken_Explorer-*-x86_64.AppImage
 ```
 
-These commands have no inline comments. If you paste other commands containing `#` comments
-into zsh, enable them with `setopt INTERACTIVE_COMMENTS` or use commands without comments.
+**Windows** — run the `...-win64-setup.exe` installer, or unzip the portable `...-win64.zip` and
+start `kraken-explorer.exe`. The binaries are not code-signed, so SmartScreen warns on first run:
+**More info → Run anyway**. Packages are built unmodified from this repository by
+[GitHub Actions](.github/workflows/cmake.yml); build from source if in doubt.
 
-### Windows installation
-
-Run the `...-win64-setup.exe` installer, or unzip the portable `...-win64.zip` anywhere and start
-`kraken-explorer.exe`.
-
-The Windows binaries are currently **not code-signed**, so SmartScreen shows
-"Windows protected your PC" on first run: click **More info → Run anyway**. The packages are
-built unmodified from this repository by [GitHub Actions](.github/workflows/cmake.yml); if in
-doubt, build from source instead (see `docs/windows-port.md`).
-
-* Privacy policy: this program will not transfer any information to other networked systems
-  unless specifically requested by the user or the person installing or operating it. The REST
-  API (`--api PORT`) listens on 127.0.0.1 only and only when started with that flag.
+Privacy: the program transfers nothing to other networked systems unless you ask it to; the REST
+API (`--api PORT`) listens on 127.0.0.1 and only when started with that flag.
 
 ## Build from source
 

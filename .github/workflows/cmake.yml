@@ -227,7 +227,7 @@ jobs:
       run: |
         if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
-    - name: Build and stage
+    - name: Build, zip and installer
       shell: pwsh
       env:
         # Tests on: the same build tree runs ctest below.
@@ -235,14 +235,7 @@ jobs:
       run: |
         $env:PATH = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin;$env:PATH"
         g++ --version
-        scripts\build_win_zip.ps1 -Build build -StageOnly
-        $Stage = (Get-Item build\kraken-explorer-*-win64).FullName
-        "STAGE=$Stage" >> $env:GITHUB_ENV
-
-    - name: Zip and installer
-      shell: pwsh
-      run: |
-        scripts\build_win_zip.ps1 -Build build -PackageOnly
+        scripts\build_win_zip.ps1 -Build build
         if (-not (Test-Path build\kraken-explorer-*-win64-setup.exe)) { throw "no setup.exe built" }
 
     - name: Build and run tests
