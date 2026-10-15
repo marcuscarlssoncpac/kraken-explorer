@@ -168,7 +168,7 @@ void app_frame(App& app)
         tx_generator_on_rx(gen, app.rx_scratch); // Generator rows triggered "On receive"
     }
     trace_append_sorted(app.trace, app.rx_scratch);
-    signal_seen_update(app.signal_seen, app.trace); // incremental: only the new frames
+    signal_seen_update(app.signal_seen, app.trace, app.trace_file.get()); // incremental; a file by its id index
     for (auto& [uid, panel] : app.instrument_panels)
     {
         instrument_panel_ingest(panel, app.setup, app.trace); // only the frames appended since last time
@@ -406,7 +406,7 @@ void app_measurement_start(App& app)
     }
     if (opened == 0)
     {
-        recorder_measurement_stopped(app.recorder); // nothing started: unwind the arming
+        recorder_measurement_aborted(app.recorder); // nothing started: no empty file, still armed
         app.measurement_error = std::format("Could not open: {}.\n"
                                             "The interface is down or missing. Bring the link up "
                                             "(e.g. sudo ip link set can0 up),\n"

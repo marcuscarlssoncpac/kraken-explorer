@@ -1494,6 +1494,20 @@ void sync_with_log(App& app, const WorkspaceTab& tab, GraphState& g)
     }
 }
 
+// [t0, t1] (absolute ns) with some margin, cursors A and B on its ends. Needs the time base.
+void centre_on(GraphState& g, int64_t t0_ns, int64_t t1_ns)
+{
+    const double a = static_cast<double>(t0_ns - g.start_ns) * 1e-9;
+    const double b = static_cast<double>(t1_ns - g.start_ns) * 1e-9;
+    const double pad = std::max((b - a) * 0.25, 5.0); // a single sample: 10 s of context around it
+    g.follow = false;
+    g.x_min = a - pad;
+    g.x_max = b + pad;
+    g.cursor_on = true;
+    g.cursor_a = a;
+    g.cursor_b = b;
+}
+
 } // namespace
 
 void draw_graph(App& app, const WorkspaceTab& tab, GraphState& g)
@@ -2203,7 +2217,10 @@ void graph_file_window(GraphState& g, const App& app)
 
 } // namespace
 
-void graph_ingest(GraphState& g, const App& app)
+namespace
+{
+
+void ingest_frames(GraphState& g, const App& app)
 {
     const Trace& tr = app.trace;
     if (g.trace_clears != tr.clears)
@@ -2307,6 +2324,17 @@ void graph_ingest(GraphState& g, const App& app)
     }
 }
 
+} // namespace
+
+void graph_ingest(GraphState& g, const App& app)
+{
+    ingest_frames(g, app);
+    if (g.show_t0_ns >= 0 && g.start_ns >= 0) // a Value Search hit plotted into a New Graph
+    {
+        centre_on(g, std::exchange(g.show_t0_ns, -1), g.show_t1_ns);
+    }
+}
+
 namespace
 {
 
@@ -2400,15 +2428,10 @@ void graph_show_range(GraphState& g, const Setup& setup, const SignalEntry& e, i
     add_search_hit(g, setup, e);
     if (g.start_ns < 0)
     {
-        return; // no time base yet: nothing ingested
+        g.show_t0_ns = t0_ns; // no time base yet (a new graph): draw_graph centres once it has one
+        g.show_t1_ns = t1_ns;
+        return;
     }
-    const double a = static_cast<double>(t0_ns - g.start_ns) * 1e-9;
-    const double b = static_cast<double>(t1_ns - g.start_ns) * 1e-9;
-    const double pad = std::max((b - a) * 0.25, 5.0); // a single sample: 10 s of context around it
-    g.follow = false;
-    g.x_min = a - pad;
-    g.x_max = b + pad;
-    g.cursor_on = true;
-    g.cursor_a = a;
-    g.cursor_b = b;
+    g.show_t0_ns = -1;
+    centre_on(g, t0_ns, t1_ns);
 }

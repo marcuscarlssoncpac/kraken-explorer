@@ -16,7 +16,9 @@
 
 #include "app.h"
 #include "core/trace_file_writer.h"
+#include "core/trace.h"
 #include "ui/frame_cache.h"
+#include "ui/signal_search.h"
 #include "ui/trace_window.h"
 
 namespace
@@ -491,5 +493,19 @@ TEST_CASE("frame cache bench")
     }
     std::printf("decode id 0x%X over the whole file: %llu frames in %.1f ms (acc %.0f), %s\n", r.id,
                 static_cast<unsigned long long>(r.count), seconds_since(t0) * 1e3, acc / static_cast<double>(r.count), mem().c_str());
+
+    // The Graph search's seen-id filter when the file opens (one app frame): the row index vs every record.
+    Trace view;
+    trace_open_file(view, c->recs, c->overflow);
+    t0 = std::chrono::steady_clock::now();
+    SignalSeen by_rows;
+    signal_seen_update(by_rows, view, &*c);
+    const double rows_s = seconds_since(t0);
+    t0 = std::chrono::steady_clock::now();
+    SignalSeen by_frames;
+    signal_seen_update(by_frames, view);
+    std::printf("seen ids: %.3f ms from the row index, %.1f ms scanning every frame (%zu ids)\n", rows_s * 1e3,
+                seconds_since(t0) * 1e3, by_rows.can.size() + by_rows.lin.size());
+    CHECK(by_rows.can == by_frames.can);
     frame_cache_close(*c);
 }

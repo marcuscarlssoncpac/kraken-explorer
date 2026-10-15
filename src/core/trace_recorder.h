@@ -98,6 +98,9 @@ void recorder_set_armed(Recorder& r, bool armed, bool measurement_running);
 // either end of a measurement is missed.
 void recorder_measurement_starting(Recorder& r);
 void recorder_measurement_stopped(Recorder& r);
+// The measurement that recorder_measurement_starting began never started (no interface opened):
+// the recording file, empty, is removed and the arming kept, as if Start had not been pressed.
+void recorder_measurement_aborted(Recorder& r);
 
 // Thread-safe.
 void recorder_enqueue(Recorder& r, const BusMessage& m);

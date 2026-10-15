@@ -39,7 +39,7 @@ parses.
 ```bash
 # Replay: load as the Replay window does, then play "as fast as possible" (twice: new, cached)
 XDG_CACHE_HOME=/tmp/kcache KRAKEN_BENCH_FILE=g2.log build/tests/replay/replay_test -tc="replay bench"
-# Frame cache: build, open, 1000 random jumps, decode one id over the whole file
+# Frame cache: build, open, 1000 random jumps, decode one id over the whole file, seen-id filter
 XDG_CACHE_HOME=/tmp/kcache KRAKEN_BENCH_FILE=g2.log build/tests/frame_cache/frame_cache_test -tc="frame cache bench"
 # Conversion to every format (output directory should be a RAM disk, or the disk's write speed is measured)
 XDG_CACHE_HOME=/tmp/kcache KRAKEN_BENCH_FILE=g2.log KRAKEN_BENCH_OUT=/dev/shm/kconv build/tests/convert/convert_test -tc="convert bench"
@@ -56,6 +56,7 @@ XDG_CACHE_HOME=/tmp/kcache KRAKEN_BENCH_FILE=g2.log KRAKEN_BENCH_OUT=/dev/shm/kc
 | Play "as fast as possible" into the trace | **1.0–1.1 s = 41–45M frames/s** | **6.1–7.4 s = 37–45M frames/s** |
 | Jump: seek a time + 50 rows with Δt, per jump | 13 µs | 31 µs |
 | Decode one id over the whole file (graph, zoomed out) | 1.38M frames in 34 ms | 8.3M frames in 244 ms |
+| Graph search seen-id filter on open (row index; every-frame scan for comparison) | 0.005 ms vs 42 ms at 11.2M frames (500 MB log, 2026-10-15) | - |
 | Cache size | 1.57 GB | 9.4 GB |
 | Peak RSS during first load (mostly mapped file pages) | 3.0 GB | 17.9 GB |
 

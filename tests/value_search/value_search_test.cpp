@@ -324,7 +324,7 @@ TEST_CASE("clicking a hit of an unplotted signal asks which graph gets it; a plo
 
     // No graph has Angle: the click adds nothing silently, it arms the popup instead.
     value_search_hit_clicked(f.app, v, tab, 0);
-    CHECK(v.plot_hit == 0);
+    CHECK(v.plot_pending);
     CHECK(v.selected == 0);
     CHECK(tab.graphs.front().signals.empty());
     frame();
@@ -352,15 +352,53 @@ TEST_CASE("clicking a hit of an unplotted signal asks which graph gets it; a plo
     CHECK(tab.graphs[1].id == 1);
     REQUIRE(tab.graphs[1].signals.size() == 1);
     CHECK(tab.graphs[1].signals[0].name == "Angle");
-    CHECK(v.plot_hit == -1);
+    CHECK_FALSE(v.plot_pending);
     CHECK(tab.graphs.front().signals.empty()); // the docked Graph was not touched
 
     // A hit of a signal some graph already plots follows that graph: no popup, no new
     // graph, no duplicate signal. (Centring is skipped headless: the graph has no time base.)
     value_search_hit_clicked(f.app, v, tab, 1);
-    CHECK(v.plot_hit == -1);
+    CHECK_FALSE(v.plot_pending);
     CHECK(tab.graphs.size() == 2);
     CHECK(tab.graphs[1].signals.size() == 1);
     frame();
     CHECK(ImGui::GetCurrentContext()->OpenPopupStack.Size == 0);
+}
+
+TEST_CASE("the Plot in popup follows its hit: a new scan or a cleared list closes it, no ghost later")
+{
+    const UiTest ui({800.0f, 600.0f}, true, true);
+    Fixture f(false);
+    ValueSearch v;
+    v.setup_generation = f.app.setup.generation;
+    v.signal = f.entry();
+    v.hits = value_search_run(f.app, *f.angle_msg, *f.angle, 2.0, 3.0).hits;
+    WorkspaceTab tab;
+    tab.graphs.emplace_back();
+    const auto frame = [&]
+    {
+        ImGui::NewFrame();
+        draw_value_search(f.app, v, tab);
+        ImGui::EndFrame();
+    };
+    frame();
+    value_search_hit_clicked(f.app, v, tab, 5);
+    frame();
+    frame();
+    REQUIRE(ImGui::GetCurrentContext()->OpenPopupStack.Size == 1);
+
+    // The trace is cleared under the open popup: its hit is gone, so is the popup...
+    trace_clear(f.app.trace);
+    frame();
+    frame();
+    CHECK_FALSE(v.plot_pending);
+    CHECK(ImGui::GetCurrentContext()->OpenPopupStack.Size == 0);
+    // ...and fresh hits later do not bring it back for some other row.
+    trace_append(f.app.trace, replay_parse(candump_log(), TraceFileFormat::CanDump).frames);
+    v.hits = value_search_run(f.app, *f.angle_msg, *f.angle, 2.0, 3.0).hits;
+    frame();
+    frame();
+    CHECK_FALSE(v.plot_pending);
+    CHECK(ImGui::GetCurrentContext()->OpenPopupStack.Size == 0);
+    CHECK(tab.graphs.front().signals.empty());
 }

@@ -153,6 +153,8 @@ struct GraphState
     uint64_t trace_clears = 0;
     uint64_t setup_generation = 0;
     int64_t start_ns = -1;    // time base, earliest frame of the first batch
+    int64_t show_t0_ns = -1;  // graph_show_range before the time base existed (a New Graph): applied
+    int64_t show_t1_ns = -1;  // once start_ns is set, -1 = none
     double last_t = 0.0;      // newest frame time
     double last_wall = 0.0;   // steady-clock seconds when last_t was seen
     double x_min = 0.0;

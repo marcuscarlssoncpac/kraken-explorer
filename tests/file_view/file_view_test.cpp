@@ -437,3 +437,61 @@ TEST_CASE("graph: file view restored after replay clears it, new signal gets dat
     REQUIRE(g.signals[0].lod != nullptr);     // pyramid built
     REQUIRE_FALSE(g.signals[0].t.empty());    // visible window populated
 }
+
+TEST_CASE("Value Search: Plot in > New Graph centres the new graph on the hit once it has a time base")
+{
+    const UiTest ui({1600, 900}, true, true);
+    FileView f;
+    const int64_t first_ts = trace_at(f.app.trace, f.app.trace.begin).ts_ns;
+    ValueSearch& v = f.search();
+    f.frame();
+    v.signal = f.entry();
+    v.setup_generation = f.app.setup.generation;
+    v.hits = value_search_run(f.app, *f.msg, *f.angle, 2.99, 3.0).hits; // frames 598, 600, 1400, 1402
+    REQUIRE(v.hits.size() == 4);
+    f.frame();
+
+    value_search_hit_clicked(f.app, v, f.tab, 2); // 14 s, no graph plots Angle: the popup is armed
+    REQUIRE(v.plot_pending);
+    f.frame();
+    f.frame();
+    ImGuiContext& ctx = *ImGui::GetCurrentContext();
+    REQUIRE(ctx.OpenPopupStack.Size == 1);
+    ImGui::ActivateItemByID(ImHashStr("New Graph", 0, ctx.OpenPopupStack[0].Window->ID));
+    f.frame();
+    REQUIRE(f.tab.graphs.size() == 2);
+    for (int i = 0; i < 4; ++i) // as draw_graph_windows: every graph ingests (time base, then the centring)
+    {
+        ImGui::NewFrame();
+        for (GraphState& gs : f.tab.graphs)
+        {
+            graph_ingest(gs, f.app);
+        }
+        ImGui::EndFrame();
+    }
+    REQUIRE(f.tab.graphs.size() == 2);
+    const GraphState& g = f.tab.graphs[1];
+    REQUIRE(g.start_ns == first_ts);
+    CHECK(g.show_t0_ns == -1); // applied
+    CHECK(g.cursor_on);
+    CHECK(g.cursor_a == doctest::Approx(14.0));
+    CHECK(g.x_min == doctest::Approx(9.0));
+    CHECK(g.x_max == doctest::Approx(19.0));
+    f.tab.graphs.clear();
+}
+
+TEST_CASE("seen ids of a loaded log come from the cache's row index, same set as a full scan")
+{
+    FileView f;
+    SignalSeen by_rows;
+    signal_seen_update(by_rows, f.app.trace, f.app.trace_file.get());
+    SignalSeen by_frames;
+    signal_seen_update(by_frames, f.app.trace); // no cache: every record
+    CHECK(by_rows.can == by_frames.can);
+    CHECK(by_rows.lin == by_frames.lin);
+    CHECK(by_rows.can.contains(angle_id));
+    CHECK(by_rows.scanned == f.app.trace.end);
+    const uint64_t gen = by_rows.generation;
+    signal_seen_update(by_rows, f.app.trace, f.app.trace_file.get()); // nothing new: no rescan, no change
+    CHECK(by_rows.generation == gen);
+}

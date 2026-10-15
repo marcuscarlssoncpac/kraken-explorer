@@ -402,6 +402,18 @@ void recorder_measurement_starting(Recorder& r)
     }
 }
 
+void recorder_measurement_aborted(Recorder& r)
+{
+    if (!r.recording.exchange(false))
+    {
+        return;
+    }
+    r.file.close(); // no listener ran, nothing was received: drop the file rather than finish it
+    std::error_code ec;
+    fs::remove(r.file_path, ec);
+    log_info(std::format("Recording discarded, the measurement did not start: {}", r.file_path));
+}
+
 void recorder_measurement_stopped(Recorder& r)
 {
     stop_recording(r);

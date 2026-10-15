@@ -16,6 +16,7 @@ struct CanDbMessage;
 struct CanDbSignal;
 struct LinFrame;
 struct LinSignal;
+struct FrameCache;
 struct Setup;
 struct Trace;
 
@@ -34,7 +35,9 @@ struct SignalSeen
 
 // Incremental: scans only the frames appended since the last call; starts over after
 // trace_clear or when the file view changed. Cheap when nothing did, call it every frame.
-void signal_seen_update(SignalSeen& seen, const Trace& trace);
+// A file view backed by `cache` (App::trace_file) is read from its per-(channel, id) row
+// index, one record per row instead of every frame.
+void signal_seen_update(SignalSeen& seen, const Trace& trace, const FrameCache* cache = nullptr);
 
 struct SignalEntry
 {

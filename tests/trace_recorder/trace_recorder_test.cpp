@@ -475,3 +475,30 @@ TEST_CASE("ASC recording of frames queued out of order across drains is time-ord
     }
     CHECK(times == std::vector<std::string>{"0.000000", "0.001000", "0.002000", "0.003000", "0.100000"});
 }
+
+TEST_CASE("an aborted start (no interface opened) leaves no file and keeps the arming")
+{
+    for (const TraceFileFormat fmt : recordable)
+    {
+        CAPTURE(trace_format_name(fmt));
+        TempDir dir;
+        Recorder r;
+        configure(r, dir.path, fmt);
+        r.config.stay_armed = false; // a stop would disarm: an abort must not
+        recorder_set_armed(r, true, false);
+        recorder_measurement_starting(r);
+        REQUIRE(r.recording);
+        REQUIRE(files_in(dir.path).size() == 1);
+        recorder_measurement_aborted(r);
+        CHECK_FALSE(r.recording);
+        CHECK(r.armed);
+        CHECK(files_in(dir.path).empty());
+
+        // The next real start records as usual.
+        recorder_measurement_starting(r);
+        recorder_rx_consumer(&r, bulk_frame(0));
+        recorder_measurement_stopped(r);
+        REQUIRE(files_in(dir.path).size() == 1);
+        CHECK(frames_in(fmt, read_all(files_in(dir.path)[0])) == 1);
+    }
+}

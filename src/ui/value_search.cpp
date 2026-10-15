@@ -67,13 +67,10 @@ void value_search_hit_clicked(App& app, ValueSearch& v, WorkspaceTab& tab, int h
     }
     const auto has = std::ranges::find_if(tab.graphs, [&](const GraphState& g)
                                           { return graph_has_signal(g, app.setup, *v.signal); });
-    if (has != tab.graphs.end())
+    v.plot_pending = has == tab.graphs.end();
+    if (!v.plot_pending)
     {
         graph_show_range(*has, app.setup, *v.signal, h.ts_ns, h.ts_ns);
-    }
-    else
-    {
-        v.plot_hit = hit;
     }
 }
 
@@ -551,8 +548,14 @@ void draw_hits(App& app, ValueSearch& v, WorkspaceTab& tab)
     ImGui::EndTable();
 
     // "Plot in ..." popup for a clicked hit whose signal no graph has: pick the graph (or a
-    // new one) that gets it, centred on the sample. Clicking elsewhere closes it.
-    if (v.plot_hit >= 0 && v.plot_hit < static_cast<int>(v.hits.size()) && v.signal)
+    // new one) that gets it, centred on the sample. Clicking elsewhere closes it. It follows
+    // `selected`, which every change of the hits keeps in step (a prune shifts it, a new scan
+    // or a cleared list resets it): the popup closes when its hit is gone.
+    if (v.plot_pending && (v.selected < 0 || v.selected >= static_cast<int>(v.hits.size()) || !v.signal || v.raw))
+    {
+        v.plot_pending = false;
+    }
+    if (v.plot_pending)
     {
         if (!ImGui::IsPopupOpen("##plot_in_graph"))
         {
@@ -579,16 +582,16 @@ void draw_hits(App& app, ValueSearch& v, WorkspaceTab& tab)
             }
             if (target != nullptr)
             {
-                graph_show_range(*target, app.setup, *v.signal, v.hits[static_cast<std::size_t>(v.plot_hit)].ts_ns,
-                                 v.hits[static_cast<std::size_t>(v.plot_hit)].ts_ns);
-                v.plot_hit = -1;
+                const int64_t ts = v.hits[static_cast<std::size_t>(v.selected)].ts_ns;
+                graph_show_range(*target, app.setup, *v.signal, ts, ts);
+                v.plot_pending = false;
                 ImGui::CloseCurrentPopup();
             }
             ImGui::EndPopup();
         }
         else
         {
-            v.plot_hit = -1;
+            v.plot_pending = false;
         }
     }
 }
@@ -669,6 +672,7 @@ void draw_value_search(App& app, ValueSearch& v, WorkspaceTab& tab)
         v.setup_generation = app.setup.generation;
         v.signal.reset(); // its pointers die with the old setup
         v.hits.clear();
+        v.selected = -1;
     }
     const float px = ImGui::GetFontSize() / 15.0f;
     // Two ways to search: a signal's value, or the raw frame (id, data bytes).
@@ -706,6 +710,7 @@ void draw_value_search(App& app, ValueSearch& v, WorkspaceTab& tab)
         v.signal = *picked;
         v.query.clear();
         v.hits.clear();
+        v.selected = -1;
         v.status.clear();
         v.from.clear();
         v.to.clear();

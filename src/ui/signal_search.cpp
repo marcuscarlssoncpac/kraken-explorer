@@ -12,6 +12,7 @@
 #include "core/trace.h"
 #include "db/model/can_db.h"
 #include "db/model/lin_db.h"
+#include "ui/frame_cache.h"
 
 namespace
 {
@@ -95,7 +96,7 @@ const SignalEntry* picked(const SignalEntry* e)
 
 } // namespace
 
-void signal_seen_update(SignalSeen& seen, const Trace& trace)
+void signal_seen_update(SignalSeen& seen, const Trace& trace, const FrameCache* cache)
 {
     const void* file = trace.file.empty() ? nullptr : trace.file.data();
     if (trace.clears != seen.clears || file != seen.file || trace.end < seen.scanned)
@@ -132,7 +133,18 @@ void signal_seen_update(SignalSeen& seen, const Trace& trace)
             changed |= seen.lin.insert(static_cast<uint8_t>(id & 0x3F)).second;
         }
     };
-    if (!trace.file.empty())
+    if (cache != nullptr && !trace.file.empty() && cache->recs.data() == trace.file.data())
+    {
+        // File view of a frame cache: the first frame of each (channel, id) row, not every frame.
+        // ponytail: a standard and an extended frame sharing an id on one channel share a row, and
+        // only the first one's kind is seen; scan the row's frames if such logs turn up.
+        for (const FrameCacheRow& row : cache->rows)
+        {
+            const FrameCacheRec& r = cache->recs[cache->row_frames[row.first]];
+            note(r.type, r.id, r.flags, r.errors);
+        }
+    }
+    else if (!trace.file.empty())
     {
         // File view: the 32-byte records in place, no payload decode.
         for (uint64_t i = seen.scanned; i < trace.end; ++i)
