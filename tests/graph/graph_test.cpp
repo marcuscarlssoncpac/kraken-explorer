@@ -408,11 +408,10 @@ TEST_CASE("a drag-drop payload over a plot with unused Y2/Y3 does not assert")
 #include <pugixml.hpp>
 
 #include "db/model/can_db.h"
+#include "ui_test.h" // fake_driver
 
 namespace
 {
-
-const DriverOps fake_ops{.name = "Fake"};
 
 // Net A: Engine (0x100) with Rpm + Temp, interface fake0 on the Fake driver at 250 kbit/s.
 void make_setup(Setup& setup, std::deque<Iface>& ifaces, bool with_temp = true)
@@ -431,7 +430,7 @@ void make_setup(Setup& setup, std::deque<Iface>& ifaces, bool with_temp = true)
     net.can_dbs.push_back(db);
     setup.networks.push_back(std::move(net));
     Iface& i = ifaces.emplace_back();
-    i.ops = &fake_ops;
+    i.ops = &fake_driver;
     i.info.name = "fake0";
 }
 

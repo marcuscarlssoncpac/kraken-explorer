@@ -11,26 +11,10 @@
 #include "core/net.h"
 #include "core/rest_api.h"
 #include "drivers/driver.h"
+#include "ui_test.h" // fake_driver
 
 namespace
 {
-
-const DriverOps fake_driver = {
-    .name = "Fake",
-    .enumerate = nullptr,
-    .open = [](Iface&, const IfaceConfig&) { return true; },
-    .close = [](Iface&) {},
-    .send = [](Iface&, const BusMessage&) { return true; },
-    .read = [](Iface&, BusMessage*, int, int timeout_ms)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeout_ms, 5)));
-        return 0;
-    },
-    .stats = nullptr,
-    .lin_sleep_wakeup = nullptr,
-    .lin_set_schedule = nullptr,
-    .lin_diag_request = nullptr,
-};
 
 // A measurement start needs an openable interface since the refused-start change.
 void add_fake(App& app)

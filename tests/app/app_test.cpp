@@ -19,36 +19,6 @@
 namespace
 {
 
-const DriverOps down_driver = {
-    .name = "Fake",
-    .enumerate = nullptr,
-    .open = [](Iface&, const IfaceConfig&) { return false; }, // the link is down
-    .close = [](Iface&) {},
-    .send = [](Iface&, const BusMessage&) { return false; },
-    .read = [](Iface&, BusMessage*, int, int) { return 0; },
-    .stats = nullptr,
-    .lin_sleep_wakeup = nullptr,
-    .lin_set_schedule = nullptr,
-    .lin_diag_request = nullptr,
-};
-
-const DriverOps up_driver = {
-    .name = "Fake",
-    .enumerate = nullptr,
-    .open = [](Iface&, const IfaceConfig&) { return true; },
-    .close = [](Iface&) {},
-    .send = [](Iface&, const BusMessage&) { return true; },
-    .read = [](Iface&, BusMessage*, int, int timeout_ms)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeout_ms, 5)));
-        return 0;
-    },
-    .stats = nullptr,
-    .lin_sleep_wakeup = nullptr,
-    .lin_set_schedule = nullptr,
-    .lin_diag_request = nullptr,
-};
-
 void add_fake(App& app, const DriverOps& ops, const char* name, bool enabled = true)
 {
     Iface& i = app.ifaces.emplace_back();
@@ -78,7 +48,7 @@ TEST_CASE("start with every enabled interface down is refused and names the inte
 {
     const UiTest ui;
     App app;
-    add_fake(app, down_driver, "fake0");
+    add_fake(app, fake_down_driver, "fake0");
     app.setup.networks[0].interfaces.push_back({.driver = "Fake", .name = "gone0", .enabled = true}); // not enumerated
     app_measurement_start(app);
     CHECK_FALSE(app.measuring);
@@ -91,8 +61,8 @@ TEST_CASE("start with one interface up and one down still starts, with a notice"
 {
     const UiTest ui;
     App app;
-    add_fake(app, up_driver, "fake0");
-    add_fake(app, down_driver, "fake1");
+    add_fake(app, fake_driver, "fake0");
+    add_fake(app, fake_down_driver, "fake1");
     app_measurement_start(app);
     CHECK(app.measuring);
     CHECK(app.measurement_error.empty()); // a notice, not the blocking error

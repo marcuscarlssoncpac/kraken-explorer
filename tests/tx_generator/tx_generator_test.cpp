@@ -39,26 +39,6 @@ extern const DriverOps socketcan_driver;
 namespace
 {
 
-std::atomic<int> fake_sent{0};
-
-const DriverOps fake_driver = {
-    .name = "Fake",
-    .enumerate = nullptr,
-    .open = [](Iface&, const IfaceConfig&) { return true; },
-    .close = [](Iface&) {},
-    .send = [](Iface&, const BusMessage&) { ++fake_sent; return true; },
-    .read =
-        [](Iface&, BusMessage*, int, int timeout_ms)
-    {
-        std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeout_ms, 5)));
-        return 0;
-    },
-    .stats = nullptr,
-    .lin_sleep_wakeup = nullptr,
-    .lin_set_schedule = nullptr,
-    .lin_diag_request = nullptr,
-};
-
 void enable(TxGenerator& gen, std::size_t row)
 {
     std::scoped_lock lock(gen.mutex);

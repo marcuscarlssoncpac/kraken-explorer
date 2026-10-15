@@ -4,12 +4,43 @@
 // Feed input with io.AddInputCharacter / io.AddKeyEvent, then ImGui::NewFrame() ... EndFrame().
 // Same config flags as main.cpp, so keyboard nav and docking behave as in the app.
 
+#include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <string>
+#include <thread>
 
 #include <imgui.h>
 #include <implot.h>
 
-#include "ui/theme.h" // theme_test and the font-dependent windows
+#include "drivers/driver.h" // the shared fake driver below
+#include "ui/theme.h"       // theme_test and the font-dependent windows
+
+// Shared fake bus driver: opens, counts every send in fake_sent (per test binary), and read
+// sleeps like an idle bus so the listener thread does not spin.
+inline std::atomic<int> fake_sent{0};
+
+inline const DriverOps fake_driver = {
+    .name = "Fake",
+    .open = [](Iface&, const IfaceConfig&) { return true; },
+    .close = [](Iface&) {},
+    .send = [](Iface&, const BusMessage&) { ++fake_sent; return true; },
+    .read =
+        [](Iface&, BusMessage*, int, int timeout_ms)
+    {
+        std::this_thread::sleep_for(std::chrono::milliseconds(std::min(timeout_ms, 5)));
+        return 0;
+    },
+};
+
+// The same driver with the link down: open is refused, nothing is sent.
+inline const DriverOps fake_down_driver = {
+    .name = "Fake",
+    .open = [](Iface&, const IfaceConfig&) { return false; },
+    .close = [](Iface&) {},
+    .send = [](Iface&, const BusMessage&) { return false; },
+    .read = [](Iface&, BusMessage*, int, int) { return 0; },
+};
 
 struct UiTest
 {
