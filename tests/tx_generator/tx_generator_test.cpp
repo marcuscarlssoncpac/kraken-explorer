@@ -664,3 +664,22 @@ TEST_CASE("J1939: a row's source address comes from the traffic seen on the bus"
     tx_apply_j1939_sa(gen, msg2);
     CHECK(msg2.id == 0x18F00431);
 }
+
+TEST_CASE("J1939 PDU1: the destination byte is neither learned as SA nor overwritten")
+{
+    TxGenerator gen;
+    // TP.CM (PGN 0xEC00, PF 0xEC < 240 = PDU1): DA 0x25 in the PS byte, SA 0x29.
+    BusMessage rx{.id = 0x18EC2529, .flags = bus_flag::extended};
+    set_length(rx, 8);
+    tx_generator_on_rx(gen, std::array{rx});
+
+    // DBC row with DA 0x00 and placeholder SA 0xFE: only the SA byte changes, the DA stays.
+    BusMessage msg{.id = 0x18EC00FE, .flags = bus_flag::extended};
+    tx_apply_j1939_sa(gen, msg);
+    CHECK(msg.id == 0x18EC0029);
+
+    // A different PDU1 PGN (0xEB00) with the same DA was never seen: untouched.
+    BusMessage other{.id = 0x18EB25FE, .flags = bus_flag::extended};
+    tx_apply_j1939_sa(gen, other);
+    CHECK(other.id == 0x18EB25FE);
+}
