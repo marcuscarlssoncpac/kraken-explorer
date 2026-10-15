@@ -13,15 +13,15 @@ DBC-decoded traffic on `vcan0`.
 
 ## Download
 
-Release [0.0.5](https://github.com/stoffej/kraken-explorer/releases/tag/0.0.5)
+Get the packages from the [latest release](https://github.com/stoffej/kraken-explorer/releases/latest)
 ([all releases](https://github.com/stoffej/kraken-explorer/releases)):
 
 | Platform | Package |
 |---|---|
-| Ubuntu / Debian | [kraken-explorer_0.0.5_amd64.deb](https://github.com/stoffej/kraken-explorer/releases/download/0.0.5/kraken-explorer_0.0.5_amd64.deb) |
-| Linux, no install | [Kraken_Explorer-0.0.5-x86_64.AppImage](https://github.com/stoffej/kraken-explorer/releases/download/0.0.5/Kraken_Explorer-0.0.5-x86_64.AppImage) |
-| Windows installer | [kraken-explorer-0.0.5-win64-setup.exe](https://github.com/stoffej/kraken-explorer/releases/download/0.0.5/kraken-explorer-0.0.5-win64-setup.exe) |
-| Windows portable | [kraken-explorer-0.0.5-win64.zip](https://github.com/stoffej/kraken-explorer/releases/download/0.0.5/kraken-explorer-0.0.5-win64.zip) |
+| Ubuntu / Debian | `kraken-explorer_<version>_amd64.deb` |
+| Linux, no install | `Kraken_Explorer-<version>-x86_64.AppImage` |
+| Windows installer | `kraken-explorer-<version>-win64-setup.exe` |
+| Windows portable | `kraken-explorer-<version>-win64.zip` |
 
 ### Linux installation
 
@@ -63,14 +63,16 @@ chmod +x ./Kraken_Explorer-*-x86_64.AppImage
 These commands have no inline comments. If you paste other commands containing `#` comments
 into zsh, enable them with `setopt INTERACTIVE_COMMENTS` or use commands without comments.
 
-### Code signing policy
+### Windows installation
 
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by
-[SignPath Foundation](https://signpath.org). The Windows exe and installer are signed by SignPath
-from builds of this repository's CI.
+Run the `...-win64-setup.exe` installer, or unzip the portable `...-win64.zip` anywhere and start
+`kraken-explorer.exe`.
 
-* Committers and reviewers: [the repository owner](https://github.com/stoffej)
-* Approvers: [the repository owner](https://github.com/stoffej)
+The Windows binaries are currently **not code-signed**, so SmartScreen shows
+"Windows protected your PC" on first run: click **More info → Run anyway**. The packages are
+built unmodified from this repository by [GitHub Actions](.github/workflows/cmake.yml); if in
+doubt, build from source instead (see `docs/windows-port.md`).
+
 * Privacy policy: this program will not transfer any information to other networked systems
   unless specifically requested by the user or the person installing or operating it. The REST
   API (`--api PORT`) listens on 127.0.0.1 only and only when started with that flag.

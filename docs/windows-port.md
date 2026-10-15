@@ -54,7 +54,15 @@ refreshes the packages and leaves a draft release unpublished.
 
 ## Code signing
 
-Release packages are signed through [SignPath Foundation](https://signpath.org/foundation), which
+**Status (Oct 2026): releases ship unsigned.** The SignPath Foundation application was declined
+for now (the program wants more public visibility — stars, forks, external references; reapply
+when the project has grown). Without the `SIGNPATH_API_TOKEN` secret the CI builds unsigned
+packages, so everything below is dormant until a certificate exists. Alternatives if signing is
+wanted sooner: Azure Trusted Signing (~$10/month, individuals US/Canada only) or a Certum
+Open Source code signing certificate (from ~€49/year).
+
+The flow, once a certificate exists: packages are signed through
+[SignPath Foundation](https://signpath.org/foundation), which
 provides free code signing certificates to open source projects. In the Windows CI job
 `scripts\build_win_zip.ps1 -StageOnly` builds and stages, the SignPath action signs
 `kraken-explorer.exe` in the cloud and writes it back into the staged folder, `-PackageOnly` zips
