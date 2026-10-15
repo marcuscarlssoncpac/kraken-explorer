@@ -52,6 +52,34 @@ void log_goto(App& app, const WorkspaceTab& tab, uint64_t index)
     trace_window_select_frame(app.trace_windows[tab.uid], app.trace, index, 3); // a few rows of context above
 }
 
+} // namespace
+
+void value_search_hit_clicked(App& app, ValueSearch& v, WorkspaceTab& tab, int hit)
+{
+    v.selected = hit;
+    const ValueHit& h = v.hits[static_cast<std::size_t>(hit)];
+    // Log on the frame; the graph that already plots the signal follows it. A signal in no
+    // graph is not added silently: the "Plot in..." popup asks which graph gets it.
+    log_goto(app, tab, h.index);
+    if (tab.graphs.empty() || v.raw || !v.signal)
+    {
+        return;
+    }
+    const auto has = std::ranges::find_if(tab.graphs, [&](const GraphState& g)
+                                          { return graph_has_signal(g, app.setup, *v.signal); });
+    if (has != tab.graphs.end())
+    {
+        graph_show_range(*has, app.setup, *v.signal, h.ts_ns, h.ts_ns);
+    }
+    else
+    {
+        v.plot_hit = hit;
+    }
+}
+
+namespace
+{
+
 // Folds one sample into the result: the seen range, and a hit when the value is in range.
 struct Fold
 {
@@ -495,13 +523,7 @@ void draw_hits(App& app, ValueSearch& v, WorkspaceTab& tab)
             ImGui::PushID(r);
             if (ImGui::Selectable(b.c_str(), r == v.selected, ImGuiSelectableFlags_SpanAllColumns))
             {
-                v.selected = r;
-                // Log on the frame, Graph around it (both cursors on the sample).
-                log_goto(app, tab, h.index);
-                if (!tab.graphs.empty() && !v.raw && v.signal)
-                {
-                    graph_show_range(tab.graphs.front(), app.setup, *v.signal, h.ts_ns, h.ts_ns);
-                }
+                value_search_hit_clicked(app, v, tab, r);
             }
             ImGui::PopID();
             ImGui::TableNextColumn();
@@ -527,6 +549,52 @@ void draw_hits(App& app, ValueSearch& v, WorkspaceTab& tab)
         }
     }
     ImGui::EndTable();
+
+    // "Plot in ..." popup for a clicked hit whose signal no graph has: pick the graph (or a
+    // new one) that gets it, centred on the sample. Clicking elsewhere closes it.
+    if (v.plot_hit >= 0 && v.plot_hit < static_cast<int>(v.hits.size()) && v.signal)
+    {
+        if (!ImGui::IsPopupOpen("##plot_in_graph"))
+        {
+            ImGui::OpenPopup("##plot_in_graph");
+        }
+        if (ImGui::BeginPopup("##plot_in_graph"))
+        {
+            ImGui::TextUnformatted(std::format("Plot {} in:", v.signal->label).c_str());
+            ImGui::Separator();
+            GraphState* target = nullptr;
+            for (GraphState& g : tab.graphs)
+            {
+                const std::string title = g.id == 0 ? std::string("Graph") : std::format("Graph {}", g.id);
+                if (ImGui::Selectable(title.c_str()))
+                {
+                    target = &g;
+                }
+            }
+            if (ImGui::Selectable("New Graph"))
+            {
+                unsigned id = 1;
+                for (const GraphState& g : tab.graphs)
+                {
+                    id = std::max(id, g.id + 1);
+                }
+                target = &tab.graphs.emplace_back();
+                target->id = id;
+            }
+            if (target != nullptr)
+            {
+                graph_show_range(*target, app.setup, *v.signal, v.hits[static_cast<std::size_t>(v.plot_hit)].ts_ns,
+                                 v.hits[static_cast<std::size_t>(v.plot_hit)].ts_ns);
+                v.plot_hit = -1;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        }
+        else
+        {
+            v.plot_hit = -1;
+        }
+    }
 }
 
 // Raw mode: an id and / or a data byte pattern.

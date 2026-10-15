@@ -325,6 +325,14 @@ TEST_CASE("Value Search: the stretches of a value range, a click syncs the Log a
     f.frame();
     REQUIRE(v.selected == 2);
 
+    // Angle is in no graph yet: the "Plot in..." popup asks which graph gets it; pick "Graph".
+    ImGuiContext& ctx = *ImGui::GetCurrentContext();
+    REQUIRE(ctx.OpenPopupStack.Size == 1);
+    ImGuiWindow* popup = ctx.OpenPopupStack[0].Window;
+    REQUIRE(popup != nullptr);
+    ImGui::ActivateItemByID(ImHashStr("Graph", 0, popup->ID));
+    f.frame();
+
     // The Log: the frame selected with three rows of context above it, no longer following the end.
     const TraceWindowState& s = f.log();
     CHECK(s.modes[static_cast<int>(TraceTab::Monitor)] == TraceViewMode::Rolling);

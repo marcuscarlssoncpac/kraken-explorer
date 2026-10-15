@@ -225,6 +225,8 @@ void graph_remove_signal(GraphState& g, std::size_t i);
 // Adds e (unless present) and shows [t0, t1] (absolute ns) with some margin, cursors A and B on
 // its ends: Value Search hits.
 void graph_show_range(GraphState& g, const Setup& setup, const SignalEntry& e, int64_t t0_ns, int64_t t1_ns);
+// True when the graph already plots the signal `e` points at.
+[[nodiscard]] bool graph_has_signal(const GraphState& g, const Setup& setup, const SignalEntry& e);
 
 // One <graph> child of the workspace <tab> per open graph: view settings and the signals by
 // name (network + message + signal, bus load by driver + interface), not their samples.

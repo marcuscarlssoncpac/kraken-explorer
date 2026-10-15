@@ -288,20 +288,31 @@ bool is_lin_signal(const GraphSignal& s, const SetupNetwork& net, uint8_t id, co
     return s.kind == GraphSignalKind::Lin && s.lin_id == id && s.name == sig.name && s.network == net.name;
 }
 
+} // namespace
+
+bool graph_has_signal(const GraphState& g, const Setup& setup, const SignalEntry& e)
+{
+    const SetupNetwork& net = setup.networks[e.network];
+    return std::any_of(g.signals.begin(), g.signals.end(), [&](const GraphSignal& s)
+    {
+        return e.can_sig != nullptr ? s.kind == GraphSignalKind::Can && s.can_sig == e.can_sig
+                                    : is_lin_signal(s, net, static_cast<uint8_t>(e.raw_id), *e.lin_sig);
+    });
+}
+
+namespace
+{
+
 // Adds a search / palette hit unless the graph already has it.
 void add_search_hit(GraphState& g, const Setup& setup, const SignalEntry& e)
 {
-    const SetupNetwork& net = setup.networks[e.network];
-    const auto id = static_cast<uint8_t>(e.raw_id);
-    const bool present = std::any_of(g.signals.begin(), g.signals.end(), [&](const GraphSignal& s)
-    {
-        return e.can_sig != nullptr ? s.kind == GraphSignalKind::Can && s.can_sig == e.can_sig : is_lin_signal(s, net, id, *e.lin_sig);
-    });
-    if (present)
+    if (graph_has_signal(g, setup, e))
     {
         return;
     }
-    GraphSignal s = e.can_sig != nullptr ? make_can_signal(net, e.raw_id, *e.can_msg, *e.can_sig) : make_lin_signal(net, id, *e.lin_frame, *e.lin_sig);
+    const SetupNetwork& net = setup.networks[e.network];
+    GraphSignal s = e.can_sig != nullptr ? make_can_signal(net, e.raw_id, *e.can_msg, *e.can_sig)
+                                         : make_lin_signal(net, static_cast<uint8_t>(e.raw_id), *e.lin_frame, *e.lin_sig);
     s.color = graph_next_color(g);
     g.signals.push_back(std::move(s));
 }
