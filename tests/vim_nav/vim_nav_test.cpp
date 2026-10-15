@@ -207,6 +207,19 @@ TEST_CASE("pick window: 2x2 grid")
     CHECK(vim_pick_window({}, 0, VimDir::Right) == -1);
 }
 
+TEST_CASE("pick window: going back prefers the window we came from (full-height pane, two neighbours)")
+{
+    // 0 top-left (Trace), 1 bottom-left (tabs), 2 right, full height (Graph)
+    const std::array<VimRect, 3> panes = {{
+        {.x0 = 0, .y0 = 0, .x1 = 100, .y1 = 80},
+        {.x0 = 0, .y0 = 80, .x1 = 100, .y1 = 200}, // centre nearer Graph's
+        {.x0 = 100, .y0 = 0, .x1 = 200, .y1 = 200},
+    }};
+    CHECK(vim_pick_window(panes, 2, VimDir::Left) == 1);     // nearest centre
+    CHECK(vim_pick_window(panes, 2, VimDir::Left, 0) == 0);  // came from 0, and it lies to the left
+    CHECK(vim_pick_window(panes, 2, VimDir::Right, 0) == -1); // the preference never overrides the direction
+}
+
 TEST_CASE("Ctrl+w l focuses the window to the right of the same tab")
 {
     const UiTest ui;
@@ -291,4 +304,110 @@ TEST_CASE("Shift+h / Shift+l focus the window left / right without Ctrl+w")
     draw();
     draw();
     CHECK(std::string_view(g.NavWindow->Name) == "A###A@7");
+}
+
+TEST_CASE("Ctrl+w l moves between docked windows (the default layout docks everything)")
+{
+    const UiTest ui({800.0f, 600.0f}, true);
+    ImGuiID left_node = 0;
+    ImGuiID right_node = 0;
+    const auto draw = [&] {
+        ImGui::NewFrame();
+        vim_window_nav(*static_cast<VimNav*>(ImGui::GetIO().UserData), 7);
+        ImGui::SetNextWindowPos({0, 0});
+        ImGui::SetNextWindowSize({800, 600});
+        ImGui::Begin("host", nullptr, ImGuiWindowFlags_NoDecoration);
+        const ImGuiID space = ImGui::GetID("space");
+        if (left_node == 0)
+        {
+            ImGui::DockBuilderRemoveNode(space);
+            ImGui::DockBuilderAddNode(space, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(space, {800, 600});
+            left_node = ImGui::DockBuilderSplitNode(space, ImGuiDir_Left, 0.5f, nullptr, &right_node);
+            ImGui::DockBuilderDockWindow("A###A@7", left_node);
+            ImGui::DockBuilderDockWindow("B###B@7", right_node);
+            ImGui::DockBuilderFinish(space);
+        }
+        ImGui::DockSpace(space);
+        ImGui::End();
+        ImGui::Begin("B###B@7");
+        ImGui::End();
+        ImGui::Begin("A###A@7");
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+    VimNav v;
+    ImGuiIO& io = ImGui::GetIO();
+    io.UserData = &v;
+    draw();
+    draw();
+    draw();
+    ImGui::SetWindowFocus("A###A@7");
+    draw();
+    const ImGuiContext& g = *ImGui::GetCurrentContext();
+    REQUIRE(g.NavWindow != nullptr);
+    REQUIRE(std::string_view(g.NavWindow->Name) == "A###A@7");
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    io.AddKeyEvent(ImGuiKey_W, true);
+    draw();
+    io.AddKeyEvent(ImGuiKey_W, false);
+    io.AddKeyEvent(ImGuiMod_Ctrl, false);
+    draw();
+    io.AddInputCharacter('l');
+    draw();
+    draw();
+    CHECK(std::string_view(g.NavWindow->Name) == "B###B@7");
+}
+
+TEST_CASE("Ctrl+w h reaches a docked window whose node hides its tab bar (the Trace pane)")
+{
+    const UiTest ui({800.0f, 600.0f}, true);
+    ImGuiID left_node = 0;
+    ImGuiID right_node = 0;
+    const auto draw = [&] {
+        ImGui::NewFrame();
+        vim_window_nav(*static_cast<VimNav*>(ImGui::GetIO().UserData), 7);
+        ImGui::SetNextWindowPos({0, 0});
+        ImGui::SetNextWindowSize({800, 600});
+        ImGui::Begin("host", nullptr, ImGuiWindowFlags_NoDecoration);
+        const ImGuiID space = ImGui::GetID("space");
+        if (left_node == 0)
+        {
+            ImGui::DockBuilderRemoveNode(space);
+            ImGui::DockBuilderAddNode(space, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(space, {800, 600});
+            left_node = ImGui::DockBuilderSplitNode(space, ImGuiDir_Left, 0.5f, nullptr, &right_node);
+            ImGui::DockBuilderGetNode(left_node)->LocalFlags |= ImGuiDockNodeFlags_HiddenTabBar; // as workspace_tabs.cpp's Trace node
+            ImGui::DockBuilderDockWindow("Trace###Trace@7", left_node);
+            ImGui::DockBuilderDockWindow("Graph###Graph@7", right_node);
+            ImGui::DockBuilderFinish(space);
+        }
+        ImGui::DockSpace(space);
+        ImGui::End();
+        ImGui::Begin("Trace###Trace@7");
+        ImGui::End();
+        ImGui::Begin("Graph###Graph@7");
+        ImGui::End();
+        ImGui::EndFrame();
+    };
+    VimNav v;
+    ImGuiIO& io = ImGui::GetIO();
+    io.UserData = &v;
+    draw();
+    draw();
+    draw();
+    ImGui::SetWindowFocus("Graph###Graph@7");
+    draw();
+    const ImGuiContext& g = *ImGui::GetCurrentContext();
+    REQUIRE(std::string_view(g.NavWindow->Name) == "Graph###Graph@7");
+    io.AddKeyEvent(ImGuiMod_Ctrl, true);
+    io.AddKeyEvent(ImGuiKey_W, true);
+    draw();
+    io.AddKeyEvent(ImGuiKey_W, false);
+    io.AddKeyEvent(ImGuiMod_Ctrl, false);
+    draw();
+    io.AddInputCharacter('h');
+    draw();
+    draw();
+    CHECK(std::string_view(g.NavWindow->Name) == "Trace###Trace@7");
 }

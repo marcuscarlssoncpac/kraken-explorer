@@ -243,7 +243,9 @@ const SignalEntry* signal_search_list(SignalSearch& s)
         return nullptr;
     }
     const SignalEntry* chosen = nullptr;
-    if (s.selected >= 0 && s.selected < n && ImGui::IsWindowFocused() && !ImGui::GetIO().WantTextInput
+    // Same focus rule as the j/k above (vim_nav): Enter takes the row they moved to.
+    if (s.selected >= 0 && s.selected < n && !ImGui::GetIO().WantTextInput
+        && ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows | ImGuiFocusedFlags_NoPopupHierarchy)
         && ImGui::IsKeyPressed(ImGuiKey_Enter, false))
     {
         chosen = &s.entries[static_cast<std::size_t>(s.hits[static_cast<std::size_t>(s.selected)].entry)];

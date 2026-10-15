@@ -152,7 +152,7 @@ bool vim_nav(VimNav& v, int& selected, int count, int page_rows, bool& focus_sea
     return moved;
 }
 
-int vim_pick_window(std::span<const VimRect> rects, int from, VimDir dir) noexcept
+int vim_pick_window(std::span<const VimRect> rects, int from, VimDir dir, int prefer) noexcept
 {
     const int n = static_cast<int>(rects.size());
     if (n == 0)
@@ -187,6 +187,10 @@ int vim_pick_window(std::span<const VimRect> rects, int from, VimDir dir) noexce
         const bool ahead = dir == VimDir::Left ? dx < 0.0f : dir == VimDir::Right ? dx > 0.0f
                          : dir == VimDir::Up   ? dy < 0.0f
                                                : dy > 0.0f;
+        if (i != from && ahead && i == prefer)
+        {
+            return i;
+        }
         const float d = dx * dx + dy * dy;
         if (i != from && ahead && (best < 0 || d < best_d))
         {
@@ -329,8 +333,11 @@ void vim_window_nav(VimNav& v, unsigned tab_uid)
         {
             break;
         }
-        if (!w->WasActive || w->Hidden || (w->Flags & ImGuiWindowFlags_ChildWindow) != 0
-            || (w->DockIsActive && !w->DockTabIsVisible) || !std::string_view(w->Name).ends_with(suffix))
+        // A docked window carries ImGuiWindowFlags_ChildWindow too (BeginDocked), and DockIsActive
+        // is false for a node holding a single window: skip only windows docked nowhere. Hidden
+        // covers the unselected tabs of a tabbed node.
+        const bool child = (w->Flags & ImGuiWindowFlags_ChildWindow) != 0 && w->DockNode == nullptr;
+        if (!w->WasActive || w->Hidden || child || !std::string_view(w->Name).ends_with(suffix))
         {
             continue;
         }
@@ -338,9 +345,15 @@ void vim_window_nav(VimNav& v, unsigned tab_uid)
         rects[n] = {.x0 = w->Pos.x, .y0 = w->Pos.y, .x1 = w->Pos.x + w->Size.x, .y1 = w->Pos.y + w->Size.y};
         windows[n++] = w;
     }
-    const int to = vim_pick_window(std::span(rects.data(), n), from, dir);
+    int prefer = -1;
+    for (std::size_t i = 0; i < n; ++i)
+    {
+        prefer = windows[i]->ID == v.w_came_from ? static_cast<int>(i) : prefer;
+    }
+    const int to = vim_pick_window(std::span(rects.data(), n), from, dir, prefer);
     if (to >= 0)
     {
+        v.w_came_from = from >= 0 ? windows[static_cast<std::size_t>(from)]->ID : 0;
         ImGui::SetWindowFocus(windows[static_cast<std::size_t>(to)]->Name);
     }
 }

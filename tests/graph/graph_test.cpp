@@ -1064,3 +1064,70 @@ TEST_CASE("signal_seen_update scans a file view (loaded log) and re-ranks the qu
     REQUIRE(s.hits.size() == 1); // the query matched against the filtered entries
     CHECK(s.entries[static_cast<std::size_t>(s.hits[0].entry)].label == "Brake.Pressure");
 }
+
+TEST_CASE("signal list: a mouse click focuses it, then j moves and Space toggles (keyboard nav on, as in the app)")
+{
+    ImGui::CreateContext();
+    ImPlot::CreateContext();
+    ImGuiIO& io = ImGui::GetIO();
+    io.DisplaySize = {1400, 900};
+    io.DeltaTime = 1.0f / 60.0f;
+    io.IniFilename = nullptr;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard; // main.cpp's flags
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+    theme_load_fonts(15.0f);
+
+    App app;
+    const auto frame = [&]
+    {
+        ImGui::NewFrame();
+        WorkspaceTab* tab = draw_workspace(app);
+        draw_graph_windows(app, tab);
+        ImGui::EndFrame();
+        app.menu.pending.reset();
+    };
+    frame();
+    GraphState& g = app.workspace.tabs[0].graphs[0];
+    for (const char* name : {"a", "b", "c"})
+    {
+        GraphSignal s = sig("V");
+        s.kind = GraphSignalKind::BusLoad;
+        s.name = name;
+        g.signals.push_back(std::move(s));
+    }
+    g.search = "zzz"; // text left in the search box, as after adding a hit: its list is drawn too
+    frame();
+    frame();
+    const ImGuiTable* table = nullptr;
+    for (int i = 0; i < ImGui::GetCurrentContext()->Tables.GetMapSize(); ++i)
+    {
+        const ImGuiTable* t = ImGui::GetCurrentContext()->Tables.TryGetMapData(i);
+        if (t != nullptr && t->OuterWindow != nullptr && std::string_view(t->OuterWindow->Name).find("/##list_") != std::string_view::npos)
+        {
+            table = t;
+        }
+    }
+    REQUIRE(table != nullptr);
+    const float row_h = table->RowPosY2 - table->RowPosY1;
+    const ImVec2 row0(table->Columns[1].MinX + 4.0f, table->RowPosY1 - 2.0f * row_h + row_h * 0.5f); // last drawn row is row 2
+    io.AddMousePosEvent(row0.x, row0.y);
+    frame();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, true);
+    frame();
+    io.AddMouseButtonEvent(ImGuiMouseButton_Left, false);
+    frame();
+    frame();
+    REQUIRE(g.selected == 0);
+
+    io.AddInputCharacter('j');
+    frame();
+    CHECK(g.selected == 1);
+    io.AddKeyEvent(ImGuiKey_Space, true);
+    frame();
+    io.AddKeyEvent(ImGuiKey_Space, false);
+    frame();
+    CHECK(g.signals[1].hidden);
+    CHECK_FALSE(g.signals[0].hidden);
+    ImPlot::DestroyContext();
+    ImGui::DestroyContext();
+}

@@ -31,6 +31,7 @@ struct VimNav
 {
     double g_time = -1.0; // ImGui::GetTime() of a first 'g' waiting for the second, -1 = none
     double w_time = -1.0; // time of Ctrl+w waiting for h/j/k/l/w (vim_window_nav), -1 = none
+    unsigned w_came_from = 0; // ImGuiID of the window the last Ctrl+w move left, 0 = none
     int yank_menu = 0;    // vim_yank_menu: 1 = open it next call, 2 = open, 0 = closed
 };
 
@@ -74,8 +75,9 @@ enum class VimDir
 };
 
 // Index of the window whose centre is nearest to rects[from]'s centre and lies in the
-// half-plane of dir; -1 when there is none. from outside the span picks 0.
-[[nodiscard]] int vim_pick_window(std::span<const VimRect> rects, int from, VimDir dir) noexcept;
+// half-plane of dir; -1 when there is none. from outside the span picks 0. prefer (the window
+// the last move came from) wins when it lies in that half-plane, so Ctrl+w l, Ctrl+w h returns.
+[[nodiscard]] int vim_pick_window(std::span<const VimRect> rects, int from, VimDir dir, int prefer = -1) noexcept;
 
 // Ctrl+w motions between the visible windows of workspace tab tab_uid (names "...@<uid>",
 // see workspace_window_name). The focused window shows the theme's selected tab / title colour.
