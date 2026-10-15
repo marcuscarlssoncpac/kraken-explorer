@@ -573,11 +573,7 @@ void draw_hits(App& app, ValueSearch& v, WorkspaceTab& tab)
             }
             if (ImGui::Selectable("New Graph"))
             {
-                unsigned id = 1;
-                for (const GraphState& g : tab.graphs)
-                {
-                    id = std::max(id, g.id + 1);
-                }
+                const unsigned id = std::ranges::max(tab.graphs, {}, &GraphState::id).id + 1;
                 target = &tab.graphs.emplace_back();
                 target->id = id;
             }
