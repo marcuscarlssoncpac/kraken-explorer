@@ -26,6 +26,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <span>
+#include <string>
 #include <vector>
 
 // An open file: a file descriptor on Linux, a HANDLE on Windows.
@@ -101,3 +103,9 @@ void platform_fine_timers();
 [[nodiscard]] std::vector<std::filesystem::path> platform_roots();
 // The running executable; empty when unknown.
 [[nodiscard]] std::filesystem::path platform_exe_path();
+
+// Processes, args[0] looked up in PATH, no console window on Windows.
+// Runs and waits; the exit code, -1 when it could not start.
+[[nodiscard]] int platform_run(std::span<const std::string> args);
+// Starts and lets go (own session / process group): it outlives this process.
+bool platform_spawn(std::span<const std::string> args);

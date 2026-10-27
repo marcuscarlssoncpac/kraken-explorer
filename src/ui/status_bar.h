@@ -29,4 +29,5 @@ void status_bar_sample(StatusBarState& s, bool measuring, uint64_t frames, std::
 // Bottom side bar. Call before draw_workspace so it sits below the workspace tabs.
 void draw_status_bar(App& app, StatusBarState& s);
 // Right end of the main menu bar; called by draw_main_menu before EndMainMenuBar.
-void draw_menu_status(const App& app, const StatusBarState& s);
+// Draws the update pill (ui/updater) left of it; true when that was clicked.
+bool draw_menu_status(const App& app, const StatusBarState& s);

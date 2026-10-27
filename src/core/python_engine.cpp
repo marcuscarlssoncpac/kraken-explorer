@@ -218,6 +218,11 @@ uint16_t send_iface(std::optional<uint16_t> interface_id, bool lin = false)
     return 0;
 }
 
+bool python_uds_send(const BusMessage& m)
+{
+    return m.iface < g_app->ifaces.size() && iface_send(g_app->ifaces[m.iface], m);
+}
+
 // LIN control calls follow the iface_send contract: shared io lock, only while open.
 template <class Fn>
 void with_open_iface(uint16_t interface_id, Fn fn)
@@ -635,6 +640,62 @@ PYBIND11_EMBEDDED_MODULE(kraken, m)
         std::scoped_lock lock(g_state->periodic_mutex);
         g_state->periodic.erase(handle); // jthread: request_stop + join
     }, py::arg("handle"));
+
+    // --- UDS (ISO 14229 over ISO-TP; decoders/uds_client.h) ---
+
+    m.def("uds_request", [](const py::bytes& data, uint32_t tx_id, uint32_t rx_id, bool extended,
+                            std::optional<uint16_t> iface_arg, double timeout) -> py::bytes
+    {
+        const UdsTarget t{.iface = send_iface(iface_arg), .tx_id = tx_id, .rx_id = rx_id, .extended = extended};
+        const std::string req = data;
+        UdsTiming timing;
+        timing.p2 = std::chrono::milliseconds(static_cast<int64_t>(timeout * 1000.0));
+        UdsResult r;
+        {
+            py::gil_scoped_release release;
+            r = uds_request(g_app->uds_client, python_uds_send, t,
+                            std::span(reinterpret_cast<const uint8_t*>(req.data()), req.size()), timing);
+        }
+        if (r.error.starts_with("no response"))
+        {
+            PyErr_SetString(PyExc_TimeoutError, r.error.c_str());
+            throw py::error_already_set();
+        }
+        if (!r.error.empty())
+        {
+            throw std::runtime_error(r.error);
+        }
+        return {reinterpret_cast<const char*>(r.response.data()), r.response.size()};
+    }, "Send a UDS request (bytes, SID first) to tx_id and return the ECU's response from rx_id: "
+       "positive (SID + 0x40, ...) or negative (0x7F, SID, NRC). Segments long requests and reassembles "
+       "long responses (ISO-TP flow control), waits through NRC 0x78 'response pending'. Returns b'' "
+       "when the suppress-positive-response bit is set. Raises TimeoutError without an answer within "
+       "`timeout` seconds and RuntimeError when the interface is not open.",
+       py::arg("data"), py::arg("tx_id") = 0x7E0, py::arg("rx_id") = 0x7E8, py::arg("extended") = false,
+       py::arg("interface_id") = py::none(), py::arg("timeout") = 1.0);
+
+    m.def("uds_scan", [](std::optional<uint16_t> iface_arg)
+    {
+        const uint16_t interface_id = send_iface(iface_arg);
+        std::vector<py::dict> out;
+        std::vector<UdsEcu> found;
+        {
+            py::gil_scoped_release release;
+            found = uds_scan(g_app->uds_client, python_uds_send, interface_id, std::chrono::milliseconds(300));
+        }
+        for (const UdsEcu& e : found)
+        {
+            py::dict d;
+            d["tx_id"] = e.tx_id;
+            d["rx_id"] = e.rx_id;
+            d["extended"] = e.extended;
+            d["guessed"] = e.guessed;
+            out.push_back(d);
+        }
+        return out;
+    }, "Functional TesterPresent to 0x7DF and 0x18DB33F1; one dict per ECU that answered: tx_id, "
+       "rx_id, extended, guessed (11-bit tx_id taken as rx_id - 8).",
+       py::arg("interface_id") = py::none());
 
     // --- Trace access (main thread) ---
 

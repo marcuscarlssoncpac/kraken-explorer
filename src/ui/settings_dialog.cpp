@@ -86,6 +86,15 @@ void draw_settings_dialog(App& app, SettingsDialogState& s)
     ImGui::Checkbox("CANblaster (UDP) driver", &s.canblaster);
     ImGui::SetItemTooltip("Applies on Measurement > Reload Interfaces. Enumeration waits 2 s for servers.");
 
+    ImGui::SeparatorText("Updates");
+    if (ImGui::Checkbox("Check for updates", &app.settings.update_check)) // applies at once, like the shortcuts
+    {
+        updater_init(app.updater, app.settings.update_check); // keeps KRAKEN_UPDATE_CHECK=0; checks at once when on
+        ImGui::MarkIniSettingsDirty();
+    }
+    ImGui::SetItemTooltip("Asks GitHub for the latest release at start and once a day; the menu bar shows\n"
+                          "\"Update\" or \"Up to date\". Nothing else is sent.");
+
     ImGui::SeparatorText("Shortcuts");
     ImGui::TextDisabled("Click a shortcut, then press the keys. Backspace clears, Esc keeps the old one.");
     // Changes apply at once and are saved with the ini (no revert on Cancel; Reset restores the defaults).

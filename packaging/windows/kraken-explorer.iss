@@ -37,3 +37,5 @@ Name: "{autoprograms}\Kraken Explorer"; Filename: "{app}\kraken-explorer.exe"; W
 
 [Run]
 Filename: "{app}\kraken-explorer.exe"; Description: "Start Kraken Explorer"; Flags: nowait postinstall skipifsilent
+; The in-app updater runs the setup with /SILENT after closing the app: start it again.
+Filename: "{app}\kraken-explorer.exe"; Flags: nowait skipifnotsilent

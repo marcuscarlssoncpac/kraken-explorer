@@ -56,6 +56,7 @@ void settings_ini_write(const App& app, std::string& out)
     const auto line = [&out](std::string_view key, const auto& value) { out += std::format("{}={}\n", key, value); };
     line("ui/theme", theme_names[static_cast<int>(app.settings.theme)]);
     line("ui/font_scale", app.settings.font_scale_pct);
+    line("update/check", app.settings.update_check ? 1 : 0);
     line("mainWindow/CANblaster", app.menu.canblaster ? 1 : 0);
     for (std::size_t i = 0; i < app.menu.chords.size(); ++i)
     {
@@ -105,6 +106,10 @@ void settings_ini_read_line(App& app, std::string_view line)
     else if (key == "ui/font_scale" && parse_number(value, n))
     {
         app.settings.font_scale_pct = std::clamp(n, 50, 300);
+    }
+    else if (key == "update/check")
+    {
+        app.settings.update_check = value == "1";
     }
     else if (key == "mainWindow/CANblaster")
     {

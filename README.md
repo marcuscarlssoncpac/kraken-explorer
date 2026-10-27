@@ -14,30 +14,31 @@ DBC-decoded traffic on `vcan0`.
 ## Install
 
 Packages are on the [latest release](https://github.com/stoffej/kraken-explorer/releases/latest) page.
+Every install checks for a new release at start and once a day: the menu bar shows **Up to date**,
+or **Update x.y.z**, and the AppImage and the Windows installer update themselves from there.
 
-**Ubuntu / Debian** — installs the latest `.deb` with icon, menu entry and SocketCAN polkit rule,
-and adds you to `netdev` (log out and back in if prompted):
+**Linux (any distribution)** — installs the AppImage in `~/.local/bin` with a menu entry, and on
+Ubuntu / Debian the SocketCAN polkit rule and the `netdev` group (sudo asks once; log out and back
+in if prompted):
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/stoffej/kraken-explorer/main/scripts/get.sh | sh
 ```
 
-Or download the `.deb` yourself and run `sudo apt install ./kraken-explorer_*_amd64.deb`.
+Or download the AppImage yourself (`chmod +x`, run it); it updates itself in place wherever it is.
+The `.deb` is still built (`sudo apt install ./kraken-explorer_*_amd64.deb`, polkit rule, icon and
+menu entry included) but updates by hand: the app only points at the release page.
 
-**Any Linux, no install** — download the AppImage, then:
+**Windows** — run the `...-win64-setup.exe` installer: the app then downloads the next installer
+itself and runs it when you choose **Install and restart**. The portable `...-win64.zip` (unzip,
+start `kraken-explorer.exe`) updates by hand. The binaries are not code-signed, so SmartScreen
+warns on first run: **More info → Run anyway**. Packages are built unmodified from this repository
+by [GitHub Actions](.github/workflows/cmake.yml); build from source if in doubt.
 
-```bash
-chmod +x ./Kraken_Explorer-*-x86_64.AppImage
-./Kraken_Explorer-*-x86_64.AppImage
-```
-
-**Windows** — run the `...-win64-setup.exe` installer, or unzip the portable `...-win64.zip` and
-start `kraken-explorer.exe`. The binaries are not code-signed, so SmartScreen warns on first run:
-**More info → Run anyway**. Packages are built unmodified from this repository by
-[GitHub Actions](.github/workflows/cmake.yml); build from source if in doubt.
-
-Privacy: the program transfers nothing to other networked systems unless you ask it to; the REST
-API (`--api PORT`) listens on 127.0.0.1 and only when started with that flag.
+Privacy: the program transfers nothing to other networked systems unless you ask it to, except the
+update check (one request for the latest release to api.github.com; off with Settings > Updates or
+`KRAKEN_UPDATE_CHECK=0`); the REST API (`--api PORT`) listens on 127.0.0.1 and only when started
+with that flag.
 
 ## Build from source
 

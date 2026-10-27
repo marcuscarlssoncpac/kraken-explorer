@@ -167,6 +167,7 @@ void app_frame(App& app)
     {
         tx_generator_on_rx(gen, app.rx_scratch); // Generator rows triggered "On receive"
     }
+    uds_window_on_rx(app.uds, app.rx_scratch); // learns ECU addresses from the traffic
     trace_append_sorted(app.trace, app.rx_scratch);
     signal_seen_update(app.signal_seen, app.trace, app.trace_file.get()); // incremental; a file by its id index
     for (auto& [uid, panel] : app.instrument_panels)
@@ -210,6 +211,8 @@ void app_frame(App& app)
     {
         setup_dialog_open(app, app.setup_dialog);
     }
+    updater_poll(app, app.updater);
+    draw_updater(app, app.updater);
     draw_status_bar(app, app.status_bar);
     draw_measurement_error(app);
     if (WorkspaceTab* tab = draw_workspace(app))
@@ -274,6 +277,11 @@ void app_frame(App& app)
         {
             draw_watch_window(app, *tab, it->second);
         }
+        if (menu_take(app.menu, Command::NewUdsDiagnostics))
+        {
+            app.uds.open = true;
+        }
+        draw_uds_window(app, app.uds, *tab);
         if (menu_take(app.menu, Command::NewDbcEditor))
         {
             DbcEditorState& ed = app.dbc_editors[tab->uid];
@@ -332,6 +340,7 @@ void app_init_interfaces(App& app)
     }
     app.rx_consumers.push_back({.fn = recorder_rx_consumer, .user = &app.recorder});
     app.rx_consumers.push_back({.fn = python_rx_consumer, .user = &app.python});
+    app.rx_consumers.push_back({.fn = uds_client_rx, .user = &app.uds_client});
     canblast_enabled = app.menu.canblaster;
     ifaces_enumerate(app.ifaces);
     if (app.setup.networks.empty())

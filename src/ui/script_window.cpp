@@ -9,13 +9,13 @@
 #include <sstream>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <misc/cpp/imgui_stdlib.h>
 
 #include "app.h"
 #include "core/log.h"
 #include "core/platform.h"
 #include "core/python_engine.h"
-#include "ui/theme.h"
 #include "ui/workspace_tabs.h"
 
 namespace
@@ -74,35 +74,39 @@ void save_as(ScriptWindowState& s, const std::string& path)
 void draw_console(App& app, ScriptWindowState& s, ImVec2 size)
 {
     PyState& py = app.python;
-    ImGui::BeginChild("##console", size, ImGuiChildFlags_Borders);
-    ImGui::PushFont(app.fonts.mono, 0.0f);
-    ImGui::PushTextWrapPos(0.0f); // long tracebacks wrap at the console's edge
+    bool changed = false;
     {
         const std::lock_guard lock(py.mutex); // the script's print() waits one draw
-        for (const PyConsoleRun& run : py.console)
-        {
-            if (run.error)
-            {
-                ImGui::PushStyleColor(ImGuiCol_Text, theme_text(ThemeText::error));
-            }
-            ImGui::TextUnformatted(run.text.data(), run.text.data() + run.text.size());
-            if (run.error)
-            {
-                ImGui::PopStyleColor();
-            }
-        }
         if (py.console_total != s.console_seen)
         {
             s.console_seen = py.console_total;
-            ImGui::SetScrollHereY(1.0f);
+            s.console_text.clear();
+            for (const PyConsoleRun& run : py.console)
+            {
+                s.console_text += run.text;
+            }
+            changed = true;
         }
     }
-    ImGui::PopTextWrapPos();
+    // ponytail: stderr loses its red in the text box; colour runs need a custom widget.
+    ImGui::PushFont(app.fonts.mono, 0.0f);
+    draw_console_box("##console", s.console_text, size.x, size.y, changed, s.console_follow, s.console_active);
     ImGui::PopFont();
-    ImGui::EndChild();
 }
 
 } // namespace
+
+void draw_console_box(const char* id, std::string& text, float width, float height, bool changed, bool& follow, bool& active)
+{
+    if (follow && !active)
+    {
+        ImGui::SetNextWindowScroll(ImVec2(-1.0f, 1e9f)); // clamped; FLT_MAX means "no target"
+    }
+    follow = changed;
+    ImGui::InputTextMultiline(id, &text, ImVec2(width, height), ImGuiInputTextFlags_ReadOnly | ImGuiInputTextFlags_WordWrap);
+    active = ImGui::IsItemActive();
+    ImGui::GetCurrentContext()->NextWindowData.ClearFlags(); // a clipped box never took the scroll
+}
 
 bool script_window_load_file(ScriptWindowState& s, const std::string& path)
 {
@@ -211,7 +215,7 @@ void draw_script_window(App& app, ScriptWindowState& s, const WorkspaceTab& tab)
                               running ? ImGuiInputTextFlags_ReadOnly : ImGuiInputTextFlags_None);
     ImGui::PopFont();
     ImGui::SameLine();
-    draw_console(app, s, ImVec2(0.0f, body));
+    draw_console(app, s, ImVec2(-FLT_MIN, body));
 
     ImGui::BeginDisabled(!running);
     ImGui::SetNextItemWidth(-FLT_MIN);

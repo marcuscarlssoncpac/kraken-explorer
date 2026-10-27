@@ -40,6 +40,7 @@ enum class Command
     NewLinControl,
     NewInstrumentPanel,
     NewWatchWindow,
+    NewUdsDiagnostics,
     NewDbcEditor,
     StandaloneGraph,
     ConditionalLogging,

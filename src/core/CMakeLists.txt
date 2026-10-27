@@ -41,4 +41,4 @@ target_link_libraries(kraken_setup PUBLIC kraken_db pugixml::pugixml)
 # core/python_engine: embedded Python (pybind11) scripting, the `kraken` module. Own
 # target: it includes app.h (through the include root) and links the Python runtime.
 add_library(kraken_python STATIC python_engine.cpp)
-target_link_libraries(kraken_python PUBLIC kraken_tasks kraken_drivers PRIVATE pybind11::embed)
+target_link_libraries(kraken_python PUBLIC kraken_tasks kraken_drivers kraken_decoders PRIVATE pybind11::embed)

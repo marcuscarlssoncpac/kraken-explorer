@@ -90,7 +90,7 @@ void draw_status_bar(App& app, StatusBarState& s)
     ImGui::PopStyleVar();
 }
 
-void draw_menu_status(const App& app, const StatusBarState& s)
+bool draw_menu_status(const App& app, const StatusBarState& s)
 {
     const LinkCount count = ifaces_link_count(app.ifaces, app.setup);
     const Link link = link_state(app, count);
@@ -103,15 +103,21 @@ void draw_menu_status(const App& app, const StatusBarState& s)
     const TriggerState trig = conditional_logging_state(app.conditional_logging);
     const ImGuiStyle& style = ImGui::GetStyle();
     const auto pill_w = [&](const char* text) { return ImGui::CalcTextSize(text).x + style.FramePadding.x * 2.0f; };
+    bool update_highlight = false;
+    const std::string update = updater_label(app.updater, update_highlight);
     float w = pill_w(label) + style.ItemSpacing.x + ImGui::CalcTextSize(rate.c_str()).x + style.ItemSpacing.x * 2.0f;
     if (trig != TriggerState::Off)
     {
         w += pill_w(trigger_state_label(trig)) + style.ItemSpacing.x;
     }
+    if (!update.empty())
+    {
+        w += pill_w(update.c_str()) + style.ItemSpacing.x;
+    }
     float x = ImGui::GetWindowContentRegionMax().x - w;
     if (x <= ImGui::GetCursorPosX())
     {
-        return; // window too narrow, the menus win
+        return false; // window too narrow, the menus win
     }
     // A rounded pill at x: text on bg. Returns its width.
     const auto pill = [&](float at, const char* text, ImU32 bg, ImU32 fg)
@@ -127,6 +133,19 @@ void draw_menu_status(const App& app, const StatusBarState& s)
         return size.x;
     };
     constexpr ImU32 dark_text = IM_COL32(0x1a, 0x12, 0x02, 255);
+    bool clicked = false;
+    if (!update.empty())
+    {
+        // Brass like the Kraken button's rim when there is an update to take, else quiet.
+        const ImVec2 at = ImGui::GetCursorScreenPos();
+        const float uw = pill(x, update.c_str(), update_highlight ? theme_u32(theme_kraken_button().border) : ImGui::GetColorU32(ImGuiCol_FrameBg),
+                              update_highlight ? dark_text : ImGui::GetColorU32(ImGuiCol_TextDisabled));
+        ImGui::SetCursorScreenPos(ImVec2(ImGui::GetWindowPos().x + x - ImGui::GetScrollX(), at.y));
+        clicked = ImGui::InvisibleButton("##update", ImVec2(uw, ImGui::GetFrameHeight()));
+        ImGui::SetItemTooltip("%s", update_highlight ? "A new Kraken Explorer release: click to update" : "Click to check again");
+        x += uw + style.ItemSpacing.x;
+        ImGui::SameLine(x);
+    }
     if (trig != TriggerState::Off)
     {
         // Conditional logging: brass while armed (waiting), coral once triggered (CSV being written).
@@ -145,4 +164,5 @@ void draw_menu_status(const App& app, const StatusBarState& s)
     const float pw = pill(x, label, bg, fg);
     ImGui::SameLine(x + pw + style.ItemSpacing.x * 2.0f);
     ImGui::TextUnformatted(rate.c_str());
+    return clicked;
 }

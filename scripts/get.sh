@@ -1,32 +1,59 @@
 #!/bin/sh
-# Install the latest Kraken Explorer release on Ubuntu / Debian:
+# Install the latest Kraken Explorer release on Linux as a self-updating AppImage:
 #   curl -fsSL https://raw.githubusercontent.com/stoffej/kraken-explorer/main/scripts/get.sh | sh
-# Downloads the newest .deb from GitHub Releases (pre-releases included), installs it with apt
-# (the SocketCAN polkit rule, icon and menu entry come with it) and puts you in the netdev group,
-# so link control from the app (up / down, new vcan) needs no password.
-# Run it as yourself: it calls sudo where needed (and asks for your password there). `| sudo sh`
-# works too; the group is then given to the user who ran sudo, not to root.
+# Puts the AppImage in ~/.local/bin (kraken-explorer.AppImage, with a `kraken-explorer` link), a
+# menu entry and icon under ~/.local/share, and on Ubuntu / Debian the SocketCAN polkit rule plus
+# the netdev group (sudo asks for your password there), so link control from the app (up / down,
+# new vcan) needs no password. The app then updates itself: the menu bar shows "Update x.y.z"
+# when a new release is out, and replaces the file in place.
+# Run it as yourself, not with sudo: the files go to your home.
 set -eu
 
-SUDO=sudo
-[ "$(id -u)" -eq 0 ] && SUDO=""
-ME=${SUDO_USER:-$USER}
+[ "$(id -u)" -ne 0 ] || { echo "Run as yourself, not as root: the AppImage goes to your home" >&2; exit 1; }
 
-API="https://api.github.com/repos/stoffej/kraken-explorer/releases?per_page=1"
-URL=$(curl -fsSL "$API" | grep -o '"browser_download_url": *"[^"]*_amd64\.deb"' | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
-[ -n "$URL" ] || { echo "No .deb found in the latest release" >&2; exit 1; }
+REPO="stoffej/kraken-explorer"
+BIN="$HOME/.local/bin"
+APP="$BIN/kraken-explorer.AppImage"
+SHARE="$HOME/.local/share"
 
-TMP=$(mktemp -d) && chmod 755 "$TMP" # readable by apt's _apt user, else it warns and installs unsandboxed
-DEB="$TMP/$(basename "$URL")"
-echo "==> Downloading $URL"
-curl -fL --progress-bar -o "$DEB" "$URL"
-echo "==> Installing $(basename "$DEB")"
-$SUDO apt-get install -y "$DEB"
-rm -rf "$TMP"
+API="https://api.github.com/repos/$REPO/releases/latest"
+JSON=$(curl -fsSL -H "Accept: application/vnd.github+json" "$API")
+URL=$(printf '%s' "$JSON" | grep -o '"browser_download_url": *"[^"]*-x86_64\.AppImage"' | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')
+TAG=$(printf '%s' "$JSON" | grep -o '"tag_name": *"[^"]*"' | head -1 | sed 's/.*"\([^"]*\)"$/\1/')
+[ -n "$URL" ] || { echo "No AppImage found in the latest release" >&2; exit 1; }
 
-# The polkit rule from the .deb applies to members of netdev only.
-if ! id -nG "$ME" | grep -qw netdev; then
-    $SUDO usermod -aG netdev "$ME"
-    echo "==> Added $ME to the netdev group: log out and back in once"
+# AppImages mount themselves with FUSE 2; Ubuntu 22.04 ships libfuse2, 24.04 libfuse2t64.
+if command -v apt-get >/dev/null && ! ldconfig -p 2>/dev/null | grep -q 'libfuse\.so\.2'; then
+    echo "==> Installing libfuse2 (AppImages need it)"
+    sudo apt-get install -y libfuse2t64 2>/dev/null || sudo apt-get install -y libfuse2
 fi
-echo "Done. Run: kraken-explorer"
+
+mkdir -p "$BIN" "$SHARE/applications" "$SHARE/icons/hicolor/256x256/apps"
+echo "==> Downloading $URL"
+curl -fL --progress-bar -o "$APP.part" "$URL"
+chmod 755 "$APP.part"
+mv -f "$APP.part" "$APP" # the running copy, if any, keeps its old inode
+ln -sfn "$APP" "$BIN/kraken-explorer"
+
+RAW="https://raw.githubusercontent.com/$REPO/$TAG"
+curl -fsSL -o "$SHARE/icons/hicolor/256x256/apps/kraken-explorer.png" "$RAW/packaging/kraken-explorer.png"
+curl -fsSL "$RAW/kraken-explorer.desktop" | sed "s|^Exec=.*|Exec=$APP %f|" > "$SHARE/applications/kraken-explorer.desktop"
+command -v update-desktop-database >/dev/null && update-desktop-database "$SHARE/applications" 2>/dev/null || true
+
+# SocketCAN link control: the polkit rule lets members of netdev run the app's `ip link` lines.
+if command -v pkexec >/dev/null && [ -d /usr/share/polkit-1/rules.d ]; then
+    echo "==> Installing the SocketCAN polkit rule (sudo)"
+    curl -fsSL -o /tmp/10-kraken-explorer-socketcan.rules "$RAW/packaging/10-kraken-explorer-socketcan.rules"
+    sudo install -m 644 /tmp/10-kraken-explorer-socketcan.rules /usr/share/polkit-1/rules.d/
+    rm -f /tmp/10-kraken-explorer-socketcan.rules
+    if ! id -nG | grep -qw netdev; then
+        sudo usermod -aG netdev "$USER"
+        echo "==> Added $USER to the netdev group: log out and back in once"
+    fi
+fi
+
+case ":$PATH:" in
+    *":$BIN:"*) ;;
+    *) echo "Note: $BIN is not in your PATH (most shells add it after a new login)" ;;
+esac
+echo "Done: Kraken Explorer $TAG. Run: kraken-explorer (or find it in the menu)"

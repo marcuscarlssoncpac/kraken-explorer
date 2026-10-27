@@ -39,6 +39,8 @@
 #include "ui/watch_window.h"
 #include "ui/vim_nav.h"
 #include "ui/trace_window.h"
+#include "ui/uds_window.h"
+#include "ui/updater.h"
 #include "ui/workspace_tabs.h"
 
 // All application state. Grows as the port proceeds (trace, setup, interfaces, ...).
@@ -101,6 +103,10 @@ struct App
     ConditionalLogging conditional_logging;  // fed from the trace every frame
     PyState python;                          // an RX consumer; one interpreter, one script at a time
     ScriptWindowState script;                // the "Python Script" window, shared by every tab
+    UdsClient uds_client;                    // an RX consumer; UDS requests of the window, Python and REST
+    UdsWindow uds;                           // the "UDS Diagnostics" window, shared by every tab; after uds_client
+    Updater updater;                         // GitHub release check, menu bar "Update" / "Up to date"
+    std::vector<std::string> restart;        // started by main() after shutdown: the updated app or its installer
 };
 
 // Enumerates the drivers and, if the setup is empty, fills it with one network per interface.

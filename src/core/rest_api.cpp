@@ -31,6 +31,7 @@
 #include "core/log.h"
 #include "core/net.h"
 #include "core/tasks.h"
+#include "ui/diag_dialog.h"
 
 namespace
 {
@@ -108,6 +109,77 @@ std::string send_json(App& app, std::string_view body)
     return iface_send(*iface, m) ? "" : "interface not open";
 }
 
+// "0x7E0", "7E0h" is not accepted; a JSON number is decimal.
+std::optional<uint32_t> json_id(std::string_view v)
+{
+    int base = 10;
+    if (v.starts_with("0x") || v.starts_with("0X"))
+    {
+        v.remove_prefix(2);
+        base = 16;
+    }
+    uint32_t id = 0;
+    const auto [end, ec] = std::from_chars(v.data(), v.data() + v.size(), id, base);
+    return ec == std::errc{} && end == v.data() + v.size() && id <= can_id_mask_extended ? std::optional(id) : std::nullopt;
+}
+
+// /uds and /uds/scan wait for ECUs, up to seconds: only the interface lookup runs on the main
+// thread, the request itself on this one, so the UI keeps drawing meanwhile.
+std::string uds_json(App& app, std::string_view path, std::string_view body, int& status)
+{
+    int index = -1;
+    const std::string name = json_get(body, "iface");
+    tasks_run_on_main_blocking(app.tasks, app, [&](App& a)
+    {
+        const auto it = std::ranges::find(a.ifaces, name, [](const Iface& i) { return i.info.name; });
+        index = it != a.ifaces.end() ? it->index : -1;
+    });
+    status = 400;
+    if (index < 0)
+    {
+        return "{\"error\":\"no such interface\"}";
+    }
+    const auto send = [&app](const BusMessage& m) { return uds_send(app, m); };
+    const bool ext = json_get(body, "extended") == "true";
+    if (path == "/uds/scan")
+    {
+        std::string out;
+        for (const UdsEcu& ecu : uds_scan(app.uds_client, send, static_cast<uint16_t>(index), std::chrono::milliseconds(300)))
+        {
+            out += std::format("{}{{\"tx\":\"0x{:X}\",\"rx\":\"0x{:X}\",\"extended\":{},\"guessed\":{}}}",
+                               out.empty() ? "" : ",", ecu.tx_id, ecu.rx_id, ecu.extended, ecu.guessed);
+        }
+        status = 200;
+        return std::format("{{\"ecus\":[{}]}}", out);
+    }
+    const auto tx = json_id(json_get(body, "tx"));
+    const auto rx = json_id(json_get(body, "rx"));
+    const auto req = parse_hex_bytes(json_get(body, "data"));
+    if (!tx || !rx || !req || req->empty())
+    {
+        return "{\"error\":\"need tx, rx (number or \\\"0x7E0\\\") and data (hex bytes like \\\"22 F1 90\\\")\"}";
+    }
+    UdsTiming timing;
+    if (const std::string t = json_get(body, "timeout"); !t.empty())
+    {
+        double sec = 0.0;
+        if (std::from_chars(t.data(), t.data() + t.size(), sec).ec == std::errc{} && sec > 0.0)
+        {
+            timing.p2 = std::chrono::milliseconds(static_cast<int64_t>(sec * 1000.0));
+        }
+    }
+    const UdsTarget t{.iface = static_cast<uint16_t>(index), .tx_id = *tx, .rx_id = *rx, .extended = ext};
+    const UdsResult r = uds_request(app.uds_client, send, t, *req, timing);
+    if (!r.error.empty())
+    {
+        status = r.error.starts_with("no response") ? 504 : 409;
+        return std::format("{{\"error\":{}}}", json_string(r.error));
+    }
+    status = 200;
+    return std::format("{{\"response\":{},\"text\":{}}}", json_string(format_hex_bytes(r.response)),
+                       json_string(uds_describe(*req, r.response)));
+}
+
 void serve(std::stop_token stop, RestApi& api, App& app)
 {
     while (!stop.stop_requested())
@@ -161,7 +233,14 @@ void serve(std::stop_token stop, RestApi& api, App& app)
             const std::string_view content(request.data() + header_end + 4, std::min(content_length, request.size() - header_end - 4));
             try
             {
-                tasks_run_on_main_blocking(app.tasks, app, [&](App& a) { body = rest_api_handle(a, method, path, content, status); });
+                if (method == "POST" && (path == "/uds" || path == "/uds/scan"))
+                {
+                    body = uds_json(app, path, content, status);
+                }
+                else
+                {
+                    tasks_run_on_main_blocking(app.tasks, app, [&](App& a) { body = rest_api_handle(a, method, path, content, status); });
+                }
             }
             catch (const std::future_error&)
             {

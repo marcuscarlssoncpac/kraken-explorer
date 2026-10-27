@@ -21,10 +21,18 @@ struct ScriptWindowState
     bool was_measuring = false;                     // to see the measurement start/stop edges
     std::string input;                              // the stdin line being typed
     uint64_t console_seen = 0;                      // PyState::console_total last drawn: auto-scroll
+    std::string console_text;                       // PyState::console joined, for the read-only text box
+    bool console_follow = false;                    // new output last frame: scroll to the bottom
+    bool console_active = false;                    // the user is selecting in the console
     FileDialog file_dialog;                         // Load / Save
 };
 
 void draw_script_window(App& app, ScriptWindowState& s, const WorkspaceTab& tab);
+
+// A read-only text box of `text` (the current font), so output can be selected and copied.
+// Scrolls to the bottom when `changed` (a frame late: the scroll clamps to last frame's height)
+// unless the user is selecting in it; follow / active are the caller's state across frames.
+void draw_console_box(const char* id, std::string& text, float width, float height, bool changed, bool& follow, bool& active);
 
 // Loads a script file into the editor. Logs and returns false when it cannot be read.
 bool script_window_load_file(ScriptWindowState& s, const std::string& path);

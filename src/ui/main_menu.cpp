@@ -53,6 +53,7 @@ constexpr std::array<CommandInfo, static_cast<std::size_t>(Command::Count)> comm
     {"LIN Control"},
     {"Instrument Panel"},
     {"Watch"},
+    {"UDS Diagnostics"},
     {"DBC Editor"},
     {"Standalone Graph", ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_B},
     {"Conditional Logging..."},
@@ -245,7 +246,15 @@ void draw_menu_bar(App& app)
         menu_item(app, Command::About);
         ImGui::EndMenu();
     }
-    draw_menu_status(app, app.status_bar); // "Connected" + frames/s in the right corner
+    if (draw_menu_status(app, app.status_bar)) // "Connected" + frames/s in the right corner, the update pill
+    {
+        app.updater.popup = true;
+        bool highlight = false;
+        if (const std::string label = updater_label(app.updater, highlight); !highlight)
+        {
+            updater_poll(app, app.updater, true); // "Up to date": check again
+        }
+    }
     ImGui::EndMainMenuBar();
 }
 

@@ -25,6 +25,7 @@ struct Settings
     ThemeMode theme = ThemeMode::System; // ui/theme; applied by settings_apply_theme()
     int font_scale_pct = 110;            // ui/font_scale, 100..175; style.FontScaleMain
     bool os_dark = false;                // desktop preference, queried once at start
+    bool update_check = true;            // ui/updater: look for a new release at start and daily
 
     std::string ini_path;       // empty = nothing is persisted
     std::string workspace_path; // current .kraken file, empty = never saved

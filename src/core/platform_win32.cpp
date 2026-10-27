@@ -329,3 +329,82 @@ std::filesystem::path platform_exe_path()
     buf.resize(n);
     return buf;
 }
+
+namespace
+{
+
+// CommandLineToArgvW rules: quotes around args with spaces, backslashes before a quote doubled.
+std::wstring command_line(std::span<const std::string> args)
+{
+    std::wstring line;
+    for (const std::string& a : args)
+    {
+        const std::wstring w = std::filesystem::path(std::u8string(a.begin(), a.end())).wstring();
+        if (!line.empty())
+        {
+            line += L' ';
+        }
+        if (!w.empty() && w.find_first_of(L" \t\"") == std::wstring::npos)
+        {
+            line += w;
+            continue;
+        }
+        line += L'"';
+        std::size_t slashes = 0;
+        for (const wchar_t c : w)
+        {
+            if (c == L'\\')
+            {
+                ++slashes;
+                continue;
+            }
+            line.append(c == L'"' ? slashes * 2 + 1 : slashes, L'\\');
+            slashes = 0;
+            line += c;
+        }
+        line.append(slashes * 2, L'\\');
+        line += L'"';
+    }
+    return line;
+}
+
+bool start(std::span<const std::string> args, DWORD flags, PROCESS_INFORMATION& pi)
+{
+    if (args.empty())
+    {
+        return false;
+    }
+    std::wstring line = command_line(args);
+    STARTUPINFOW si{};
+    si.cb = sizeof(si);
+    return CreateProcessW(nullptr, line.data(), nullptr, nullptr, FALSE, flags, nullptr, nullptr, &si, &pi) != 0;
+}
+
+} // namespace
+
+int platform_run(std::span<const std::string> args)
+{
+    PROCESS_INFORMATION pi{};
+    if (!start(args, CREATE_NO_WINDOW, pi))
+    {
+        return -1;
+    }
+    WaitForSingleObject(pi.hProcess, INFINITE);
+    DWORD code = 0;
+    GetExitCodeProcess(pi.hProcess, &code);
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return static_cast<int>(code);
+}
+
+bool platform_spawn(std::span<const std::string> args)
+{
+    PROCESS_INFORMATION pi{};
+    if (!start(args, DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP, pi))
+    {
+        return false;
+    }
+    CloseHandle(pi.hThread);
+    CloseHandle(pi.hProcess);
+    return true;
+}

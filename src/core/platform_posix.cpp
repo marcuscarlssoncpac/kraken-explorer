@@ -24,11 +24,15 @@
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <thread>
+#include <vector>
 
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/sendfile.h>
+#include <spawn.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 namespace
@@ -254,4 +258,59 @@ std::filesystem::path platform_exe_path()
 {
     std::error_code ec;
     return std::filesystem::read_symlink("/proc/self/exe", ec);
+}
+
+namespace
+{
+
+std::vector<char*> argv_of(std::span<const std::string> args)
+{
+    std::vector<char*> argv;
+    for (const std::string& a : args)
+    {
+        argv.push_back(const_cast<char*>(a.c_str()));
+    }
+    argv.push_back(nullptr);
+    return argv;
+}
+
+} // namespace
+
+int platform_run(std::span<const std::string> args)
+{
+    if (args.empty())
+    {
+        return -1;
+    }
+    std::vector<char*> argv = argv_of(args);
+    pid_t pid = 0;
+    if (posix_spawnp(&pid, argv[0], nullptr, nullptr, argv.data(), environ) != 0)
+    {
+        return -1;
+    }
+    int status = 0;
+    while (waitpid(pid, &status, 0) < 0 && errno == EINTR)
+    {
+    }
+    return WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+}
+
+bool platform_spawn(std::span<const std::string> args)
+{
+    if (args.empty())
+    {
+        return false;
+    }
+    std::vector<char*> argv = argv_of(args);
+    posix_spawnattr_t attr;
+    posix_spawnattr_init(&attr);
+    posix_spawnattr_setflags(&attr, POSIX_SPAWN_SETSID);
+    pid_t pid = 0;
+    const bool ok = posix_spawnp(&pid, argv[0], nullptr, &attr, argv.data(), environ) == 0;
+    posix_spawnattr_destroy(&attr);
+    if (ok)
+    {
+        std::thread([pid] { waitpid(pid, nullptr, 0); }).detach(); // no zombie while we run
+    }
+    return ok;
 }

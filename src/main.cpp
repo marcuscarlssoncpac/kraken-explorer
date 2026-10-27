@@ -19,6 +19,7 @@
 */
 #include "app.h"
 #include "core/log.h"
+#include "core/platform.h"
 #include "core/png.h"
 #include "core/rest_api.h"
 #include "ui/frame_cache.h"
@@ -103,7 +104,7 @@ double wait_timeout(const App& app, double since_wake)
         watching = watching || !r.data.path.empty();
     }
     const bool busy = app.python.running || ImGui::GetCurrentContext()->SettingsDirtyTimer > 0.0f
-                      || ImGui::GetIO().WantTextInput || since_wake < 2.0 || loading;
+                      || ImGui::GetIO().WantTextInput || since_wake < 2.0 || loading || updater_downloading(app.updater);
     return busy ? 0.25 : watching ? watch_tick : -1.0;
 }
 
@@ -331,6 +332,7 @@ int main(int argc, char** argv)
     settings_apply_theme(app);
     app.fonts = theme_load_fonts(15.0f * dpi_scale); // ui/font_scale multiplies it via style.FontScaleMain;
     app_init_interfaces(app);
+    updater_init(app.updater, app.settings.update_check && smoke_frames < 0); // a smoke run asks nobody
     RestApi api;
     if (api_port > 0)
     {
@@ -477,6 +479,7 @@ int main(int argc, char** argv)
 
     settings_save(app);
     app.replays.clear(); // joins the replay players; they post tasks (glfwPostEmptyEvent) too
+    uds_window_shutdown(app, app.uds); // first: a REST or Python UDS request waiting on an ECU ends now
     rest_api_stop(api, app);   // a request in flight still gets its reply
     python_shutdown(app, app.python); // before the interfaces close: the script may still send
     app_measurement_stop(app); // RX threads call glfwPostEmptyEvent: stop them before glfwTerminate
@@ -503,5 +506,9 @@ int main(int argc, char** argv)
     glfwDestroyWindow(window);
     glfwTerminate();
     frame_cache_wait_saved(); // a log opened just now: its cache reaches the disk, not rebuilt next time
+    if (!app.restart.empty() && !platform_spawn(app.restart)) // the updated AppImage or the new installer
+    {
+        std::fprintf(stderr, "cannot start %s\n", app.restart.front().c_str());
+    }
     return 0;
 }
