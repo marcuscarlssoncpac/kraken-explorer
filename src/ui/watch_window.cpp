@@ -89,7 +89,7 @@ void draw_add_combo(App& app, WatchWindow& w)
     {
         w.search.clear();
     }
-    const SignalEntry* hit = signal_search_input(w.picker, app.setup, "Filter...", w.search, appearing);
+    const SignalEntry* hit = signal_search_input(w.picker, app.setup, "Filter...", w.search, appearing, &app.signal_seen);
     for (int row = 0; row < static_cast<int>(w.picker.hits.size()); ++row)
     {
         const SignalEntry& e = w.picker.entries[static_cast<std::size_t>(w.picker.hits[static_cast<std::size_t>(row)].entry)];

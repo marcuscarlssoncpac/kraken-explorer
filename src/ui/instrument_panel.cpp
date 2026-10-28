@@ -232,7 +232,7 @@ bool draw_signal_picker(App& app, InstrumentPanel& p, Instrument& inst)
     {
         p.search.clear(); // one filter for every widget's combo: a stale one would re-bind on Enter
     }
-    const SignalEntry* hit = signal_search_input(p.picker, app.setup, "Filter...", p.search, appearing);
+    const SignalEntry* hit = signal_search_input(p.picker, app.setup, "Filter...", p.search, appearing, &app.signal_seen);
     for (int row = 0; row < static_cast<int>(p.picker.hits.size()); ++row)
     {
         const SignalEntry& e = p.picker.entries[static_cast<std::size_t>(p.picker.hits[static_cast<std::size_t>(row)].entry)];

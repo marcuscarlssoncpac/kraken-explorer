@@ -54,3 +54,4 @@ tests/*/target_wrapper.sh
 *.asc
 __pycache__/
 imgui.ini
+build-dc/

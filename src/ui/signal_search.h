@@ -22,7 +22,7 @@ struct Trace;
 
 // The ids seen in the trace (live monitor or a loaded file), as the keys the DBC/LDF
 // lookups use. Feed it with signal_seen_update; passed to signal_search_update so the
-// Graph's search lists only signals that actually occur on the bus / in the log.
+// signal pickers list only signals that actually occur on the bus / in the log.
 struct SignalSeen
 {
     std::unordered_set<uint32_t> can; // DBC raw id: bit 31 = extended
@@ -67,16 +67,18 @@ struct SignalSearch
     bool scroll_to_selected = false;
     std::vector<int> positions;       // scratch: matched chars of the row being drawn
     bool can_only = false;            // Instrument Panel: CAN signals only
+    bool list_all = false;            // "List all signals" ticked: ignore the seen filter
     VimNav vim;                       // j/k/gg/G on the focused list, '/' back to the input
     bool focus_input = false;
 };
 
 // Rebuilds the entries when the setup (or the seen set, when given) changed and re-ranks
 // when the query changed. Cheap when neither did, so call it every frame. With `seen`,
-// only signals of messages in it are listed (the Graph); without, every DBC/LDF signal.
+// only signals of messages in it are listed; without, every DBC/LDF signal.
 void signal_search_update(SignalSearch& s, const Setup& setup, const std::string& query, const SignalSeen* seen = nullptr);
 
-// Search input (hint text) bound to `query`. Up/Down while it is active move the selection.
+// Search input (hint text) bound to `query`, with a "List all signals" checkbox under it when
+// `seen` is given (off: only seen signals). Up/Down while it is active move the selection.
 // Returns the selected entry on Enter, nullptr otherwise.
 [[nodiscard]] const SignalEntry* signal_search_input(SignalSearch& s, const Setup& setup, const char* hint,
                                                      std::string& query, bool focus = false, const SignalSeen* seen = nullptr);

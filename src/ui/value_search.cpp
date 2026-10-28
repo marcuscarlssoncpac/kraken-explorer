@@ -693,7 +693,7 @@ void draw_value_search(App& app, ValueSearch& v, WorkspaceTab& tab)
         return;
     }
     ImGui::SetNextItemWidth(-FLT_MIN);
-    const SignalEntry* picked = signal_search_input(v.finder, app.setup, "Find signal (fuzzy)...", v.query);
+    const SignalEntry* picked = signal_search_input(v.finder, app.setup, "Find signal (fuzzy)...", v.query, false, &app.signal_seen);
     if (!v.query.empty())
     {
         if (ImGui::BeginChild("##signals", ImVec2(0.0f, 6.5f * ImGui::GetTextLineHeightWithSpacing()), ImGuiChildFlags_Borders))

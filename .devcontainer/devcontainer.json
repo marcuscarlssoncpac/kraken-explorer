@@ -1,0 +1,15 @@
+{
+    "name": "kraken-explorer",
+    "build": { "dockerfile": "Dockerfile" },
+    // The image's "ubuntu" user, remapped to the host uid so files in the bind mount stay yours.
+    "remoteUser": "ubuntu",
+    "updateRemoteUserUID": true,
+    // Run the app on the host's X server (Xwayland under Wayland); Mesa renders in software.
+    "mounts": [ "source=/tmp/.X11-unix,target=/tmp/.X11-unix,type=bind" ],
+    "containerEnv": { "DISPLAY": "${localEnv:DISPLAY}" },
+    // Host network: SocketCAN interfaces (vcan0, can0) are visible in the container.
+    // Host IPC: Mesa's software renderer hands frames to X through MIT-SHM shared memory.
+    "runArgs": [ "--net=host", "--ipc=host" ],
+    // build-dc/, not build/: a CMake cache is tied to the host or the container it was configured in.
+    "postCreateCommand": "git config --global --add safe.directory ${containerWorkspaceFolder} && cmake -S . -B build-dc -G Ninja"
+}

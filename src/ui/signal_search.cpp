@@ -17,43 +17,43 @@
 namespace
 {
 
-void rebuild_entries(SignalSearch& s, const Setup& setup, const SignalSeen* seen)
+void rebuild_entries(SignalSearch& search, const Setup& setup, const SignalSeen* seen)
 {
-    s.entries.clear();
-    for (std::size_t ni = 0; ni < setup.networks.size(); ++ni)
+    search.entries.clear();
+    for (std::size_t network_index = 0; network_index < setup.networks.size(); ++network_index)
     {
-        const SetupNetwork& net = setup.networks[ni];
-        for (const auto& db : net.can_dbs)
+        const SetupNetwork& network = setup.networks[network_index];
+        for (const auto& database : network.can_dbs)
         {
-            for (const auto& [raw_id, msg] : db->messages)
+            for (const auto& [raw_id, message] : database->messages)
             {
                 if (seen != nullptr && !seen->can.contains(raw_id))
                 {
                     continue; // never on the bus / in the log
                 }
-                for (const CanDbSignal& sig : msg.signals)
+                for (const CanDbSignal& signal : message.signals)
                 {
-                    s.entries.push_back({.label = msg.name + '.' + sig.name, .network = ni, .raw_id = raw_id,
-                                         .can_msg = &msg, .can_sig = &sig});
+                    search.entries.push_back({.label = message.name + '.' + signal.name, .network = network_index, .raw_id = raw_id,
+                                              .can_msg = &message, .can_sig = &signal});
                 }
             }
         }
-        if (s.can_only)
+        if (search.can_only)
         {
             continue;
         }
-        for (const auto& db : net.lin_dbs)
+        for (const auto& database : network.lin_dbs)
         {
-            for (const auto& [id, frame] : db->frames)
+            for (const auto& [id, frame] : database->frames)
             {
                 if (seen != nullptr && !seen->lin.contains(id))
                 {
                     continue;
                 }
-                for (const LinSignal& sig : frame.signals)
+                for (const LinSignal& signal : frame.signals)
                 {
-                    s.entries.push_back({.label = frame.name + '.' + sig.name, .network = ni, .raw_id = id,
-                                         .lin_frame = &frame, .lin_sig = &sig});
+                    search.entries.push_back({.label = frame.name + '.' + signal.name, .network = network_index, .raw_id = id,
+                                              .lin_frame = &frame, .lin_sig = &signal});
                 }
             }
         }
@@ -168,70 +168,75 @@ void signal_seen_update(SignalSeen& seen, const Trace& trace, const FrameCache* 
     }
 }
 
-void signal_search_update(SignalSearch& s, const Setup& setup, const std::string& query, const SignalSeen* seen)
+void signal_search_update(SignalSearch& search, const Setup& setup, const std::string& query, const SignalSeen* seen)
 {
-    const uint64_t seen_gen = seen != nullptr ? seen->generation : UINT64_MAX;
-    const bool rebuilt = s.generation != setup.generation || s.seen_generation != seen_gen;
+    const uint64_t seen_generation_now = seen != nullptr ? seen->generation : UINT64_MAX;
+    const bool rebuilt = search.generation != setup.generation || search.seen_generation != seen_generation_now;
     if (rebuilt)
     {
-        rebuild_entries(s, setup, seen);
-        s.generation = setup.generation;
-        s.seen_generation = seen_gen;
+        rebuild_entries(search, setup, seen);
+        search.generation = setup.generation;
+        search.seen_generation = seen_generation_now;
     }
-    if (!rebuilt && query == s.query)
+    if (!rebuilt && query == search.query)
     {
         return;
     }
-    s.query = query;
-    s.hits.clear();
-    for (std::size_t i = 0; i < s.entries.size(); ++i)
+    search.query = query;
+    search.hits.clear();
+    for (std::size_t entry_index = 0; entry_index < search.entries.size(); ++entry_index)
     {
-        const int score = fuzzy_score(query, s.entries[i].label);
+        const int score = fuzzy_score(query, search.entries[entry_index].label);
         if (score >= 0)
         {
-            s.hits.push_back({.score = score + recency_bonus(s.entries[i].label), .entry = static_cast<int>(i)});
+            search.hits.push_back({.score = score + recency_bonus(search.entries[entry_index].label), .entry = static_cast<int>(entry_index)});
         }
     }
     // Best score first, then the shorter label (fzf's tie-break); equal ones keep setup order.
-    std::stable_sort(s.hits.begin(), s.hits.end(), [&](const SearchHit& a, const SearchHit& b)
+    std::stable_sort(search.hits.begin(), search.hits.end(), [&](const SearchHit& left, const SearchHit& right)
     {
-        if (a.score != b.score)
+        if (left.score != right.score)
         {
-            return a.score > b.score;
+            return left.score > right.score;
         }
-        return s.entries[static_cast<std::size_t>(a.entry)].label.size() < s.entries[static_cast<std::size_t>(b.entry)].label.size();
+        return search.entries[static_cast<std::size_t>(left.entry)].label.size() < search.entries[static_cast<std::size_t>(right.entry)].label.size();
     });
-    s.selected = 0;
-    s.scroll_to_selected = true;
+    search.selected = 0;
+    search.scroll_to_selected = true;
 }
 
-const SignalEntry* signal_search_input(SignalSearch& s, const Setup& setup, const char* hint, std::string& query, bool focus,
+const SignalEntry* signal_search_input(SignalSearch& search, const Setup& setup, const char* hint, std::string& query, bool focus,
                                        const SignalSeen* seen)
 {
-    if (focus || s.focus_input)
+    if (focus || search.focus_input)
     {
         ImGui::SetKeyboardFocusHere();
-        s.focus_input = false;
+        search.focus_input = false;
     }
     // CallbackHistory makes the input own Up/Down (keyboard nav would otherwise leave the field).
-    int step = 0;
+    int selection_step = 0;
     const auto history = [](ImGuiInputTextCallbackData* data)
     {
         *static_cast<int*>(data->UserData) += data->EventKey == ImGuiKey_DownArrow ? 1 : -1;
         return 0;
     };
-    const bool enter = ImGui::InputTextWithHint("##signal_search", hint, &query,
-                                                ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory, history, &step);
-    signal_search_update(s, setup, query, seen);
-    const int n = static_cast<int>(s.hits.size());
-    if (step != 0 && n > 0)
+    const bool enter_pressed = ImGui::InputTextWithHint("##signal_search", hint, &query,
+                                                        ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_CallbackHistory, history, &selection_step);
+    if (seen != nullptr)
     {
-        s.selected = std::clamp(s.selected + step, 0, n - 1);
-        s.scroll_to_selected = true;
+        ImGui::Checkbox("List all signals", &search.list_all);
+        ImGui::SetItemTooltip("Off: only signals whose message occurs on the bus / in the loaded log");
     }
-    if (enter && !query.empty() && s.selected < n)
+    signal_search_update(search, setup, query, search.list_all ? nullptr : seen);
+    const int hit_count = static_cast<int>(search.hits.size());
+    if (selection_step != 0 && hit_count > 0)
     {
-        return picked(&s.entries[static_cast<std::size_t>(s.hits[static_cast<std::size_t>(s.selected)].entry)]);
+        search.selected = std::clamp(search.selected + selection_step, 0, hit_count - 1);
+        search.scroll_to_selected = true;
+    }
+    if (enter_pressed && !query.empty() && search.selected < hit_count)
+    {
+        return picked(&search.entries[static_cast<std::size_t>(search.hits[static_cast<std::size_t>(search.selected)].entry)]);
     }
     return nullptr;
 }

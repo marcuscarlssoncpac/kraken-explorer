@@ -13,7 +13,7 @@ build/src/kraken-explorer               # settings: ~/.config/kraken-explorer/kr
 ctest --test-dir build --output-on-failure
 ```
 
-Options: `-DKRAKEN_SANITIZE=ON` (ASan+UBSan, what CI runs), `-DKRAKEN_TESTS=OFF`, `-DGLFW_BUILD_X11=OFF -DGLFW_BUILD_WAYLAND=OFF` (headless: build + ctest only). Default build type is RelWithDebInfo. System deps (apt list) are in `docs/manual.md`.
+Options: `-DKRAKEN_SANITIZE=ON` (ASan+UBSan, what CI runs), `-DKRAKEN_TESTS=OFF`, `-DGLFW_BUILD_X11=OFF -DGLFW_BUILD_WAYLAND=OFF` (headless: build + ctest only). Default build type is RelWithDebInfo. Local heavy work (build, ctest, smoke) runs as `taskset -c 2-11 nice -n 10` with at most `-j2`, one build at a time: two of the twelve cores stay free. System deps (apt list) are in `docs/manual.md`.
 
 Tests: one doctest binary per `tests/<area>/<area>_test.cpp`, auto-discovered by glob, ctest name `<area>`, binary `build/tests/<area>/<area>_test`. A new area needs no CMake unless it has data files or defines (then `tests/<area>/CMakeLists.txt`, listed in `tests/CMakeLists.txt`).
 
@@ -22,7 +22,7 @@ ctest --test-dir build -R trace                         # one area
 build/tests/trace/trace_test -tc="*chunk*"              # one doctest case
 ```
 
-Headless UI tests use `tests/ui_test.h` (an ImGui context without a backend; feed keys with `io.AddInputCharacter` / `io.AddKeyEvent`). For end-to-end GUI checks run the binary under `xvfb-run` with `XDG_CONFIG_HOME` pointed at a scratch dir and drive it with `xdotool`. Tests needing `vcan0`/`vcan1` skip themselves when missing; `scripts/setup_vcan.sh` creates them (sudo). `tests/format_compat` is not a ctest: it writes samples and `validate.py` reads them back with python-can/scapy/asammdf (CI job). `scripts/build_deb.sh` builds a .deb like CI's package job.
+Headless UI tests use `tests/ui_test.h` (an ImGui context without a backend; feed keys with `io.AddInputCharacter` / `io.AddKeyEvent`). For end-to-end GUI checks run the binary visibly, with real GPU rendering, in a nested sway (`WLR_BACKENDS=wayland sway -c <conf>`, one per instance), with `XDG_CONFIG_HOME` pointed at a scratch dir; drive it with `xdotool` on that sway's own Xwayland display and screenshot with `grim` on its Wayland display. Not Xvfb (wrong rendering), and never xdotool/grim on the real desktop. Tests needing `vcan0`/`vcan1` skip themselves when missing; `scripts/setup_vcan.sh` creates them (sudo). `tests/format_compat` is not a ctest: it writes samples and `validate.py` reads them back with python-can/scapy/asammdf (CI job). `scripts/build_deb.sh` builds a .deb like CI's package job.
 
 Benchmarks are doctest cases (`replay bench`, `frame cache bench`, `convert bench`) that do nothing unless `KRAKEN_BENCH_FILE=<log>` is set (`convert` also needs `KRAKEN_BENCH_OUT=<dir>`); point `XDG_CACHE_HOME` at an empty dir so the first load really parses. Commands, test-log generation (`examples/tentacle_sim.py --size 2G`) and reference numbers are in `docs/performance-baseline.md`; compare against them when touching the load / replay / convert paths.
 

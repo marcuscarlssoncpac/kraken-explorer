@@ -319,6 +319,7 @@ void add_search_hit(GraphState& g, const Setup& setup, const SignalEntry& e)
 
 void draw_signal_tree(App& app, GraphState& g)
 {
+    const bool list_all = g.finder.list_all; // the search box's "List all signals" checkbox
     for (std::size_t ni = 0; ni < app.setup.networks.size(); ++ni)
     {
         const SetupNetwork& net = app.setup.networks[ni];
@@ -332,7 +333,9 @@ void draw_signal_tree(App& app, GraphState& g)
                 {
                     for (const auto& [raw_id, msg] : db->messages)
                     {
-                        if (!ImGui::TreeNode(&msg, "%s (0x%X)", msg.name.c_str(), raw_id & can_id_mask_extended))
+                        // Like the search: only messages seen on the bus / in the loaded log, unless "List all signals".
+                        const bool has_data = app.signal_seen.can.contains(raw_id);
+                        if ((!list_all && !has_data) || !ImGui::TreeNode(&msg, "%s (0x%X)", msg.name.c_str(), raw_id & can_id_mask_extended))
                         {
                             continue;
                         }
@@ -361,7 +364,8 @@ void draw_signal_tree(App& app, GraphState& g)
                 {
                     for (const auto& [id, frame] : db->frames)
                     {
-                        if (!ImGui::TreeNode(&frame, "%s (0x%02X)", frame.name.c_str(), id))
+                        const bool has_data = app.signal_seen.lin.contains(id);
+                        if ((!list_all && !has_data) || !ImGui::TreeNode(&frame, "%s (0x%02X)", frame.name.c_str(), id))
                         {
                             continue;
                         }
