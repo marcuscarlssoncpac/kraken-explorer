@@ -132,6 +132,10 @@ void append_candump_line(std::string& out, const BusMessage& m, std::string_view
     // Integer seconds + microseconds: exact, unlike going through a double.
     auto it = std::format_to(std::back_inserter(out), "({}.{:06}) {}",
                              m.ts_ns / 1000000000, (m.ts_ns % 1000000000) / 1000, iface_name);
+    // Fields are separated by spaces: a name with spaces (the PEAK channel "PCAN-USB (USB1)") is
+    // written with underscores, or no candump reader, this one included, finds the frame.
+    std::replace_if(out.end() - static_cast<std::ptrdiff_t>(iface_name.size()), out.end(),
+                    [](char c) { return c == ' ' || c == '\t'; }, '_');
 
     if (is_error_frame(m))
     {
