@@ -19,6 +19,7 @@
 #include <zlib.h>
 
 #include "app.h"
+#include "core/local_time.h"
 #include "core/platform.h"
 #include "core/text.h"
 #include "core/trace_line_format.h"
@@ -281,14 +282,7 @@ int64_t asc_date_ns(std::string_view header)
     const local_time<nanoseconds> local = local_days{year_month_day{std::chrono::year{year}, std::chrono::month{static_cast<unsigned>(month - std::begin(months)) + 1},
                                                                     std::chrono::day{day}}}
                                           + hours{h} + minutes{min} + nanoseconds{sec_ns};
-    try
-    {
-        return current_zone()->to_sys(local).time_since_epoch().count();
-    }
-    catch (const std::exception&) // a local time skipped or repeated by a DST change
-    {
-        return duration_cast<nanoseconds>(local.time_since_epoch()).count();
-    }
+    return to_sys_time(local).time_since_epoch().count();
 }
 
 void parse_asc(std::string_view header, std::string_view data, ReplayFile& f, const ReplayParseProgress& p)
@@ -1085,16 +1079,8 @@ void parse_mf4(std::string_view data, ReplayFile& f, const ReplayParseProgress& 
     }
     else if ((time_flags & 1) != 0)
     {
-        try
-        {
-            using namespace std::chrono;
-            const local_time<nanoseconds> local{nanoseconds{start_ns}};
-            start_ns = current_zone()->to_sys(local, choose::earliest).time_since_epoch().count();
-        }
-        catch (const std::exception&)
-        {
-            // no time zone database: keep it as UTC
-        }
+        const std::chrono::local_time<std::chrono::nanoseconds> local{std::chrono::nanoseconds{start_ns}};
+        start_ns = to_sys_time(local).time_since_epoch().count(); // UTC without tzdata
     }
     std::string records;
     std::size_t n = 0;
