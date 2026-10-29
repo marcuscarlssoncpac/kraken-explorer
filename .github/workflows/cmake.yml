@@ -56,10 +56,12 @@ jobs:
           !build/_deps/*-build
         key: fetchcontent-${{ runner.os }}-${{ hashFiles('cmake/deps.cmake') }}
 
-    # One cache per OS and job (the flags differ), restored from the newest one of that job.
+    # One cache per OS and job (the flags differ), restored from the newest one of that job and
+    # saved by &ccache_save at the end of the job even when a test failed: actions/cache alone
+    # would drop a failed run's objects, and a failing run is exactly when the next push comes.
     - &ccache
-      name: Cache compiler output (ccache)
-      uses: actions/cache@v5
+      name: Restore compiler cache (ccache)
+      uses: actions/cache/restore@v5
       with:
         path: |
           ~/.cache/ccache
@@ -90,6 +92,16 @@ jobs:
 
     - name: Run tests
       run: ctest --test-dir build --output-on-failure
+
+    - &ccache_save
+      name: Save compiler cache (ccache)
+      if: always()
+      uses: actions/cache/save@v5
+      with:
+        path: |
+          ~/.cache/ccache
+          ~/Library/Caches/ccache
+        key: ccache-${{ runner.os }}-${{ github.job }}-${{ github.sha }}
 
   format-compat:
     name: Trace format compatibility (python-can, scapy, asammdf)
@@ -124,6 +136,8 @@ jobs:
         build/tests/format_compat/trace_format_samples build/format_compat
         .venv/bin/python tests/format_compat/validate.py build/format_compat
 
+    - *ccache_save
+
   package:
     name: Build Kraken Explorer DEB + AppImage
     runs-on: ubuntu-24.04
@@ -151,6 +165,8 @@ jobs:
         scripts/build_deb.sh build
         ccache -s
         dpkg-deb --info build/*.deb
+
+    - *ccache_save
 
     - name: Read version
       run: |
@@ -347,6 +363,8 @@ jobs:
         name: KrakenExplorer-macOS-dmg
         path: "build/macos/kraken-explorer-*-macos-*.dmg"
         if-no-files-found: error
+
+    - *ccache_save
 
   release:
     name: Release
