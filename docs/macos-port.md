@@ -5,9 +5,9 @@ feature set where macOS has the drivers.
 
 Status (2026-10-29): builds with Apple clang, all 68 ctest areas pass (also under ASan + UBSan),
 CI builds the DMG. The bundled Python runs scripts without a Python install. Live CAN: PEAK
-through MacCAN's PCBUSB (classic CAN tested on the earlier port of this driver: a PCAN-USB on a
-live 500 kbit/s bus, receive, transmit, reopen; CAN FD untested), CANblaster, SLCAN and GrIP on
-`/dev/cu.*`.
+through MacCAN's PCBUSB, tested listen-only on a PCAN-USB on a live 500 kbit/s bus (about 560
+frames/s, hardware timestamps, recording, DBC decoding, reopen after a crash); transmit and CAN FD
+untested. CANblaster, SLCAN and GrIP on `/dev/cu.*` build but have not seen hardware.
 
 ## Build
 
@@ -52,8 +52,9 @@ its `install.sh` puts `libPCBUSB.dylib` in `/usr/local/lib`).
 * **gs_usb over libusb**: candleLight / CANable and the CAN channels of the STM32 firmware. On
   Linux these are SocketCAN; on macOS nothing claims the interface, so libusb can talk to it.
   Needs hardware to test.
-* **PEAK CAN FD is untested** (as on Windows); the macOS receive wake-up (PCBUSB's descriptor plus
-  a pipe for send()) has not seen a PCAN-USB in this form yet.
+* **PEAK CAN FD and transmit are untested** on macOS. PCBUSB differs from PCANBasic.dll in two
+  ways the driver handles: a read that returns a frame also carries the bus state (bus light
+  etc.), and right after `CAN_Initialize` it can hand over a frame left from the previous session.
 * Finder "Open With" (GLFW does not deliver `application:openFiles:`), App Nap is off through
   `NSAppSleepDisabled` but the RX threads have no QoS class.
 * Developer ID signing and notarization.

@@ -68,6 +68,12 @@ constexpr PcanStatus pcan_queue_empty = 0x20;
 constexpr PcanStatus pcan_bus_passive = 0x40000;
 constexpr PcanStatus pcan_ill_handle = 0x1C00;   // mask: hardware, net or client handle invalid
 constexpr PcanStatus pcan_not_initialized = 0x4000000;
+#ifdef __APPLE__
+// libPCBUSB adds the bus state to the result of a read that did return a frame.
+constexpr PcanStatus pcan_read_bus_state = pcan_bus_light | pcan_bus_heavy | pcan_bus_passive;
+#else
+constexpr PcanStatus pcan_read_bus_state = 0;
+#endif
 
 constexpr uint8_t pcan_receive_event = 0x03;
 constexpr uint8_t pcan_listen_only = 0x08;
@@ -598,7 +604,7 @@ int pcan_read(Iface& iface, BusMessage* out, int max, int timeout_ms)
             log_error(std::format("PCAN {}: CAN_Read failed: 0x{:X}", iface.info.name, st));
             return n > 0 ? n : -1;
         }
-        if (st != pcan_ok) // queue empty, or a bus state: stats() reports that
+        if ((st & ~pcan_read_bus_state) != pcan_ok) // queue empty, or a bus state: stats() reports that
         {
             break;
         }
@@ -611,11 +617,13 @@ int pcan_read(Iface& iface, BusMessage* out, int max, int timeout_ms)
             ++p.rx_errors;
             continue;
         }
-        if (p.offset_ns == 0)
+        // ponytail: the first frame's delivery delay (about 1 ms) becomes a constant offset;
+        // QueryPerformanceCounter against the device clock at open if it matters. A first frame
+        // left over from before the open (libPCBUSB hands one over at times) sets it too far back:
+        // the first frame that arrives sooner than that allows takes over.
+        if (const int64_t offset = now_ns() - device_ns; p.offset_ns == 0 || offset < p.offset_ns - 100'000'000)
         {
-            // ponytail: the first frame's delivery delay (about 1 ms) becomes a constant offset;
-            // QueryPerformanceCounter against the device clock at open if it matters.
-            p.offset_ns = now_ns() - device_ns;
+            p.offset_ns = offset;
         }
         BusMessage& m = out[n++];
         m = BusMessage{.id = msg.id & can_id_mask_extended, .iface = iface.index};
