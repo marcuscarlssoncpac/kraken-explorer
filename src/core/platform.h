@@ -91,8 +91,9 @@ bool mem_prefetch(PlatformFile f, void* map, uint64_t off, std::size_t size);
 // RAM a new allocation can use without swapping: free plus droppable page cache.
 [[nodiscard]] uint64_t platform_available_ram();
 [[nodiscard]] int platform_pid();
-// Timed waits wake within about a millisecond. Windows rounds them to its 15.6 ms tick unless a
-// process asks; the threads that pace frames (cyclic transmit, replay) call this when they start.
+// Timed waits of the calling thread wake within about a millisecond: Windows rounds them to its
+// 15.6 ms tick unless the process asks, macOS coalesces them unless the thread is real-time. The
+// threads that pace frames (cyclic transmit, replay, macros) call this first thing.
 void platform_fine_timers();
 
 // Directories. $XDG_CONFIG_HOME / $XDG_CACHE_HOME win everywhere when set (tests and

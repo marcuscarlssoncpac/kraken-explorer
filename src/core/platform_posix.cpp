@@ -35,8 +35,11 @@
 #include <unistd.h>
 
 #ifdef __APPLE__
-#include <mach-o/dyld.h> // _NSGetExecutablePath
-#include <mach/mach.h>   // host_statistics64
+#include <mach-o/dyld.h>   // _NSGetExecutablePath
+#include <mach/mach.h>     // host_statistics64
+#include <mach/mach_time.h>
+#include <mach/thread_policy.h>
+#include <pthread.h>       // pthread_mach_thread_np
 
 extern char** environ;
 #else
@@ -275,6 +278,18 @@ int platform_pid()
 
 void platform_fine_timers()
 {
+#ifdef __APPLE__
+    // XNU coalesces a thread's timers by its class: a background process (one launchd started, as a
+    // CI runner is) gets up to 4x the wait, 100 ms at most, so a 10 ms cycle ran at ~37 ms. A
+    // real-time thread gets no leeway, so the pacing thread asks for that policy for itself.
+    mach_timebase_info_data_t tb{};
+    mach_timebase_info(&tb);
+    const auto ticks = [&](uint64_t ns) { return static_cast<uint32_t>(ns * tb.denom / tb.numer); };
+    thread_time_constraint_policy_data_t policy{.period = ticks(1'000'000), .computation = ticks(100'000),
+                                                .constraint = ticks(500'000), .preemptible = TRUE};
+    thread_policy_set(pthread_mach_thread_np(pthread_self()), THREAD_TIME_CONSTRAINT_POLICY,
+                      reinterpret_cast<thread_policy_t>(&policy), THREAD_TIME_CONSTRAINT_POLICY_COUNT);
+#endif
 }
 
 std::filesystem::path platform_home_dir()

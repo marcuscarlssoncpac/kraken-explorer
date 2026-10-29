@@ -1512,6 +1512,7 @@ std::span<const FrameCacheRec> replay_frames(const ReplayLoaded& d)
 
 void replay_run(std::stop_token stop, Replay& r, std::deque<Iface>& ifaces, Tasks& tasks, double speed, bool loop)
 {
+    platform_fine_timers();
     using namespace std::chrono;
     std::mutex mutex;
     std::condition_variable_any cv; // only to sleep until the deadline or the stop request
@@ -1818,7 +1819,6 @@ void replay_start(Replay& r, std::deque<Iface>& ifaces, Tasks& tasks, int hold)
     r.hold = hold;
     r.position = 0;
     r.running = true;
-    platform_fine_timers();
     r.player = std::jthread(replay_run, std::ref(r), std::ref(ifaces), std::ref(tasks),
                             r.fast ? 0.0 : std::clamp(static_cast<double>(r.speed), 0.1, 10.0), r.loop);
 }
