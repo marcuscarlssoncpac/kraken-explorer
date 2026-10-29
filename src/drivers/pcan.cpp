@@ -70,7 +70,7 @@ constexpr PcanStatus pcan_ill_handle = 0x1C00;   // mask: hardware, net or clien
 constexpr PcanStatus pcan_not_initialized = 0x4000000;
 #ifdef __APPLE__
 // libPCBUSB adds the bus state to the result of a read that did return a frame.
-constexpr PcanStatus pcan_read_bus_state = pcan_bus_light | pcan_bus_heavy | pcan_bus_passive;
+constexpr PcanStatus pcan_read_bus_state = pcan_bus_light | pcan_bus_heavy | pcan_bus_off | pcan_bus_passive;
 #else
 constexpr PcanStatus pcan_read_bus_state = 0;
 #endif
@@ -350,7 +350,7 @@ PcanStatus rx_event_open(RxEvent& e, const PcanBasic& pb, PcanHandle h)
     {
         return st;
     }
-    if (pipe(e.wake) != 0)
+    if (pipe(e.wake) != 0 || e.queue >= FD_SETSIZE || e.wake[0] >= FD_SETSIZE) // select() cannot wait on higher descriptors
     {
         return pcan_ill_handle;
     }
@@ -400,6 +400,7 @@ struct Pcan
     RxEvent event;
     bool open = false;
     int64_t offset_ns = 0;       // host time - device time, taken at the first frame
+    int64_t opened_ns = 0;       // host time at open: a stale first frame may re-anchor offset_ns for a second
     uint32_t bitrate = 0;
 
     std::mutex tx_mutex;
@@ -501,6 +502,7 @@ bool pcan_open(Iface& iface, const IfaceConfig& config)
     p->fd = fd;
     p->bitrate = config.bitrate;
     p->data_bitrate = fd ? config.fd_bitrate : 0;
+    p->opened_ns = now_ns();
     if (const PcanStatus st = rx_event_open(p->event, *pb, ch->handle); st != pcan_ok)
     {
         log_error(std::format("PCAN {}: receive event refused: 0x{:X}", name, st));
@@ -620,8 +622,11 @@ int pcan_read(Iface& iface, BusMessage* out, int max, int timeout_ms)
         // ponytail: the first frame's delivery delay (about 1 ms) becomes a constant offset;
         // QueryPerformanceCounter against the device clock at open if it matters. A first frame
         // left over from before the open (libPCBUSB hands one over at times) sets it too far back:
-        // the first frame that arrives sooner than that allows takes over.
-        if (const int64_t offset = now_ns() - device_ns; p.offset_ns == 0 || offset < p.offset_ns - 100'000'000)
+        // within the first second a frame that arrives sooner than that allows takes over. Only
+        // then: later the device clock's drift would re-anchor and step every timestamp back.
+        const int64_t now = now_ns();
+        if (const int64_t offset = now - device_ns;
+            p.offset_ns == 0 || (now - p.opened_ns < 1'000'000'000 && offset < p.offset_ns - 100'000'000))
         {
             p.offset_ns = offset;
         }

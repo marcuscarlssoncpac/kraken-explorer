@@ -616,7 +616,7 @@ void recover_line(DbcCursor& cur)
 CanDbMessage* find_referenced_message(CanDb& db, long long id)
 {
     CanDbMessage* msg = can_db_find_message(db, static_cast<uint32_t>(id));
-    if (msg == nullptr && id > 0x7FF && id <= 0x1FFFFFFF)
+    if (msg == nullptr && id >= 0 && id <= 0x1FFFFFFF)
     {
         msg = can_db_find_message(db, static_cast<uint32_t>(id) | 0x80000000u);
     }

@@ -36,6 +36,10 @@ using MoveOnlyFunction = std::move_only_function<Signature>;
 
 #else
 
+#ifndef _LIBCPP_VERSION
+#error "std::move_only_function missing: compile this translation unit as C++23 (kraken_tasks exports it PUBLIC)"
+#endif
+
 #include <memory>
 #include <type_traits>
 #include <utility>
