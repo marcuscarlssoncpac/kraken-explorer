@@ -107,7 +107,7 @@ TEST_CASE("cyclic sender keeps the interval, disables rows whose send fails, sto
         // Against the time that really passed: a loaded CI (GitHub's macOS runner) oversleeps by
         // 100 ms and more while the real-time sender keeps its interval.
         const auto due = static_cast<int>((std::chrono::steady_clock::now() - start) / std::chrono::milliseconds(10));
-        CHECK(sent >= due * 2 / 3); // generous for ASan
+        CHECK(sent >= due / 2);     // a stalled sender, not a slow CI (Windows made 19 of 30)
         CHECK(sent <= due + 2);     // the first frame goes out at once; no bursts
         {
             std::scoped_lock lock(gen.mutex);
