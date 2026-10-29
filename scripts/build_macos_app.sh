@@ -97,6 +97,7 @@ done 2>&1 | grep -v 'invalidate the code signature' || true
 minos() { otool -l "$1" | awk '/LC_BUILD_VERSION/ { b = 1 } b && $1 == "minos" { print $2; exit }'; }
 for f in "$EXE" "$CONTENTS/Frameworks/libusb-1.0.0.dylib" "$PY_DST/Python"; do
   m=$(minos "$f")
+  echo "$(basename "$f") minos ${m:-?}"
   if [ -n "$m" ] && [ "$(printf '%s\n%s\n' "$MIN_MACOS" "$m" | sort -V | tail -1)" = "$m" ]; then
     MIN_MACOS=$m
   fi

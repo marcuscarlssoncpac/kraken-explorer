@@ -345,7 +345,8 @@ jobs:
         curl -fsSL -o libusb.tar.bz2 https://github.com/libusb/libusb/releases/download/v1.0.30/libusb-1.0.30.tar.bz2
         mkdir libusb-src && tar -xjf libusb.tar.bz2 -C libusb-src --strip-components 1
         cd libusb-src
-        MACOSX_DEPLOYMENT_TARGET=13.3 ./configure --prefix="$PWD/out" --disable-static >/dev/null
+        export MACOSX_DEPLOYMENT_TARGET=13.3 # read by clang at compile and link time, so for make too
+        ./configure --prefix="$PWD/out" --disable-static >/dev/null
         make -j3 install >/dev/null
         echo "LIBUSB_DYLIB=$PWD/out/lib/libusb-1.0.0.dylib" >> "$GITHUB_ENV"
 
