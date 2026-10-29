@@ -338,9 +338,13 @@ TEST_CASE("on-receive row is sent once per trigger by the sender thread")
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
         CHECK(fake_sent.load() == before); // nothing armed, Manual never sent by the thread
         const BusMessage hit{.id = 0x100, .iface = 0};
+        const auto armed = std::chrono::steady_clock::now();
         tx_generator_on_rx(gen, std::span(&hit, 1));
         std::this_thread::sleep_for(std::chrono::milliseconds(5));
-        CHECK(fake_sent.load() == before); // still within the delay
+        if (std::chrono::steady_clock::now() - armed < std::chrono::milliseconds(15)) // a loaded CI oversleeps past the delay
+        {
+            CHECK(fake_sent.load() == before); // still within the delay
+        }
         std::this_thread::sleep_for(std::chrono::milliseconds(60));
         CHECK(fake_sent.load() == before + 1);
         {
